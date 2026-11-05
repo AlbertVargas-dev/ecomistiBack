@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Compiled output
+dist/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Database / Prisma
+/generated/prisma
+
+# Logs & temp
+*.log
+.DS_Store
+
+# Guia de desarrollor
+.GUIA_DESARROLLO.md
