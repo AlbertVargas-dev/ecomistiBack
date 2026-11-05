@@ -1,0 +1,123 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  RECOLECTOR
+  CIUDADANO
+}
+
+enum TipoResiduo {
+  PLASTICO
+  CARTON
+  VIDRIO
+  METAL
+}
+
+enum EstadoCanje {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  nombres      String
+  apellidos    String
+  dni          String   @unique
+  telefono     String?
+  rol          Role     @default(CIUDADANO)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  pesajesRegistrados Pesaje[]          @relation("RecolectorPesajes")
+  pesajesEntregados  Pesaje[]          @relation("CiudadanoPesajes")
+  canjesSolicitados  Canje[]
+  puntosBalance      EcoPuntosBalance?
+
+  @@map("users")
+}
+
+model PuntoEncuentro {
+  id        String   @id @default(uuid())
+  nombre    String // Ej: "Parque Bolognesi - Paucarpata"
+  distrito  String // Ej: "Paucarpata", "Cerro Colorado"
+  direccion String
+  latitud   Float
+  longitud  Float
+  horario   String // Ej: "Martes y Jueves 08:00 - 11:00"
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  pesajes Pesaje[]
+
+  @@map("puntos_encuentro")
+}
+
+model Pesaje {
+  id               String         @id @default(uuid())
+  recolectorId     String
+  recolector       User           @relation("RecolectorPesajes", fields: [recolectorId], references: [id])
+  ciudadanoId      String
+  ciudadano        User           @relation("CiudadanoPesajes", fields: [ciudadanoId], references: [id])
+  puntoEncuentroId String
+  puntoEncuentro   PuntoEncuentro @relation(fields: [puntoEncuentroId], references: [id])
+
+  tipoResiduo     TipoResiduo
+  pesoKg          Float
+  puntosOtorgados Int
+  fechaRegistro   DateTime    @default(now())
+
+  @@index([ciudadanoId])
+  @@index([recolectorId])
+  @@index([puntoEncuentroId])
+  @@map("pesajes")
+}
+
+model EcoPuntosBalance {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  puntosActuales   Int      @default(0)
+  puntosHistoricos Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  @@map("ecopuntos_balance")
+}
+
+model Beneficio {
+  id          String   @id @default(uuid())
+  titulo      String
+  descripcion String
+  puntosCosto Int
+  stock       Int      @default(100)
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  canjes Canje[]
+
+  @@map("beneficios")
+}
+
+model Canje {
+  id           String      @id @default(uuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id])
+  beneficioId  String
+  beneficio    Beneficio   @relation(fields: [beneficioId], references: [id])
+  puntosUsados Int
+  estado       EstadoCanje @default(PENDIENTE)
+  createdAt    DateTime    @default(now())
+
+  @@index([userId])
+  @@index([estado])
+  @@map("canjes")
+}

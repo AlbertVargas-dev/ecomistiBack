@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: ecomisti-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ecomisti
+      POSTGRES_PASSWORD: ecomisti
+      POSTGRES_DB: ecomisti
+    ports:
+      - "5432:5432"
+    volumes:
+      - ecomisti_pgdata:/var/lib/postgresql/data
+volumes:
+  ecomisti_pgdata:
