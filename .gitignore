@@ -18,5 +18,6 @@ dist/
 *.log
 .DS_Store
 
-# Guia de desarrollor
-.GUIA_DESARROLLO.md
+# Guía de desarrollo local
+GUIA_DESARROLLO.md
+guia_desarrollo.md
