@@ -5,7 +5,11 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Role } from '@prisma/client';
+import bcrypt from 'bcrypt';
+import { SALT_ROUNDS } from '../config/security.config.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto.js';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto.js';
 import { PaginacionDto, paginacion } from '../common/dto/paginacion.dto.js';
 import { OfertasService } from '../ofertas/ofertas.service.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
@@ -99,6 +103,44 @@ export class UsuariosService {
       totalEntregas,
       recompensasDisponibles,
     };
+  }
+
+  /** Actualizar datos del perfil propio (nombres, apellidos, teléfono). */
+  async actualizarPerfil(user: AuthUser, dto: ActualizarPerfilDto) {
+    this.assertActive(user);
+    const actualizado = await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        nombres: dto.nombres,
+        apellidos: dto.apellidos,
+        telefono: dto.telefono,
+      },
+      include: { puntosBalance: true },
+    });
+    const { passwordHash: _ph, ...sanitized } = actualizado;
+    return sanitized;
+  }
+
+  /** Cambiar contraseña verificando la actual (nunca se guarda en claro). */
+  async cambiarPassword(user: AuthUser, dto: CambiarPasswordDto) {
+    this.assertActive(user);
+    const actual = await this.prisma.user.findUnique({
+      where: { id: user.id },
+    });
+    if (!actual) throw new NotFoundException('Usuario no encontrado');
+
+    const ok = await bcrypt.compare(dto.passwordActual, actual.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('La contraseña actual es incorrecta');
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash: await bcrypt.hash(dto.passwordNueva, SALT_ROUNDS),
+      },
+    });
+    return { message: 'Contraseña actualizada correctamente' };
   }
 
   async getNotificaciones(user: AuthUser) {
