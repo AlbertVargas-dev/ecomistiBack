@@ -176,6 +176,13 @@ export class AdminService {
 
   // --- Ofertas (spec §8/§14)
 
+  async listarOfertas(q: PaginacionDto = {}) {
+    return this.prisma.ofertaRecompensa.findMany({
+      orderBy: { createdAt: 'desc' },
+      ...paginacion(q),
+    });
+  }
+
   async crearOferta(admin: AuthUser, dto: CreateOfertaDto) {
     const oferta = await this.prisma.ofertaRecompensa.create({
       data: {
