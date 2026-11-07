@@ -389,20 +389,63 @@ export class AdminService {
 
   // --- Reportes y auditoría (spec §14)
 
-  async reporteResiduos() {
+  /**
+   * Reporte de residuos con filtros de fecha y zona (diseño: Reportes).
+   * Top recolectores con NOMBRE (no solo id) y kg por tipo.
+   */
+  async reporteResiduos(q: ResumenQueryDto = {}) {
+    const fecha = {
+      gte: q.desde ? new Date(q.desde) : undefined,
+      lte: q.hasta ? new Date(q.hasta) : undefined,
+    };
+    const zona = q.distrito ? { puntoEncuentro: { distrito: q.distrito } } : {};
+
     const porTipo = await this.prisma.detalleEntrega.groupBy({
       by: ['tipoResiduo'],
+      where: { entrega: { fechaCaptura: fecha, ...zona } },
       _sum: { pesoKg: true, puntosSubtotal: true },
       _count: { _all: true },
     });
+
     const entregas = await this.prisma.entrega.groupBy({
       by: ['recolectorId'],
+      where: { fechaCaptura: fecha, ...zona },
       _sum: { puntosTotales: true },
       _count: { _all: true },
       orderBy: { _count: { id: 'desc' } },
       take: 10,
     });
-    return { porTipo, topRecolectores: entregas };
+
+    const recolectores = await this.prisma.user.findMany({
+      where: { id: { in: entregas.map((e) => e.recolectorId) } },
+      select: { id: true, nombres: true, apellidos: true },
+    });
+    const nombres = new Map(
+      recolectores.map((r) => [r.id, `${r.nombres} ${r.apellidos}`]),
+    );
+
+    const totalKg = porTipo.reduce((s, r) => s + Number(r._sum.pesoKg ?? 0), 0);
+
+    return {
+      periodo: {
+        desde: q.desde ?? null,
+        hasta: q.hasta ?? null,
+        distrito: q.distrito ?? null,
+      },
+      totalKg,
+      porTipo: porTipo.map((r) => ({
+        tipoResiduo: r.tipoResiduo,
+        kg: Number(r._sum.pesoKg ?? 0),
+        puntos: r._sum.puntosSubtotal ?? 0,
+        entregas: r._count._all,
+      })),
+      topRecolectores: entregas.map((e) => ({
+        recolectorId: e.recolectorId,
+        nombre: nombres.get(e.recolectorId) ?? '—',
+        puntos: e._sum.puntosTotales ?? 0,
+        entregas: e._count._all,
+      })),
+    };
   }
 
   async listarAuditoria(q: PaginacionDto = {}) {
