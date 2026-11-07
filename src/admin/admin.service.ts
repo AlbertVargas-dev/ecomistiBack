@@ -14,6 +14,7 @@ import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
+import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { CreateRecolectorDto } from './dto/create-recolector.dto.js';
 import { CreateStaffDto } from './dto/create-staff.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
@@ -395,18 +396,70 @@ export class AdminService {
 
   // --- Dashboard admin: clientes, recompensas y basura acumulada
 
-  async dashboardResumen() {
-    const [totalClientes, totalEntregas, kg, puntos, vouchers, ofertas] =
+  /**
+   * Resumen del Panel General (diseño): tarjetas del período + comparativa
+   * vs período anterior de igual duración (deltaPct para "↑ 12.5% vs semana anterior").
+   * Sin fechas: últimos 7 días.
+   */
+  async dashboardResumen(q: ResumenQueryDto = {}) {
+    const hasta = q.hasta ? new Date(q.hasta) : new Date();
+    const desde = q.desde
+      ? new Date(q.desde)
+      : new Date(hasta.getTime() - 6 * 24 * 60 * 60 * 1000);
+    if (desde > hasta) {
+      throw new BadRequestException(
+        'La fecha desde no puede ser posterior a hasta',
+      );
+    }
+    const duracion = hasta.getTime() - desde.getTime();
+    const anteriorHasta = desde;
+    const anteriorDesde = new Date(desde.getTime() - duracion);
+
+    const rango = (d: Date, h: Date) => ({ gte: d, lte: h });
+
+    const metricas = async (d: Date, h: Date) => {
+      const [kgTotales, kgReciclable, puntos, entregas, clientesNuevos] =
+        await Promise.all([
+          this.prisma.detalleEntrega.aggregate({
+            where: { entrega: { fechaCaptura: rango(d, h) } },
+            _sum: { pesoKg: true },
+          }),
+          this.prisma.detalleEntrega.aggregate({
+            where: {
+              tipoResiduo: 'RECICLABLE',
+              entrega: { fechaCaptura: rango(d, h) },
+            },
+            _sum: { pesoKg: true },
+          }),
+          this.prisma.movimientoPuntos.aggregate({
+            where: { tipo: 'ACREDITO', createdAt: rango(d, h) },
+            _sum: { monto: true },
+          }),
+          this.prisma.entrega.count({
+            where: { fechaCaptura: rango(d, h) },
+          }),
+          this.prisma.user.count({
+            where: {
+              rol: { in: [Role.CIUDADANO, Role.URBANIZACION] },
+              createdAt: rango(d, h),
+            },
+          }),
+        ]);
+      return {
+        residuosKg: Number(kgTotales._sum.pesoKg ?? 0),
+        reciclableKg: Number(kgReciclable._sum.pesoKg ?? 0),
+        ecoPuntos: puntos._sum.monto ?? 0,
+        entregas,
+        clientesNuevos,
+      };
+    };
+
+    const [actual, anterior, totalClientes, vouchers, ofertas] =
       await Promise.all([
+        metricas(desde, hasta),
+        metricas(anteriorDesde, anteriorHasta),
         this.prisma.user.count({
           where: { rol: { in: [Role.CIUDADANO, Role.URBANIZACION] } },
-        }),
-        this.prisma.entrega.count(),
-        this.prisma.detalleEntrega.aggregate({
-          _sum: { pesoKg: true },
-        }),
-        this.prisma.ecoPuntosBalance.aggregate({
-          _sum: { puntosHistoricos: true },
         }),
         this.prisma.voucherCanje.groupBy({
           by: ['estado'],
@@ -414,11 +467,24 @@ export class AdminService {
         }),
         this.prisma.ofertaRecompensa.count({ where: { activo: true } }),
       ]);
+
+    const delta = (a: number, b: number) =>
+      b === 0 ? null : Math.round(((a - b) / b) * 1000) / 10;
+
     return {
+      periodo: { desde, hasta },
+      anterior: { desde: anteriorDesde, hasta: anteriorHasta },
       totalClientes,
-      totalEntregas,
-      totalKg: Number(kg._sum.pesoKg ?? 0),
-      totalPuntosEmitidos: puntos._sum.puntosHistoricos ?? 0,
+      totalEntregas: actual.entregas,
+      totalKg: actual.residuosKg,
+      materialReciclableKg: actual.reciclableKg,
+      totalPuntosEmitidos: actual.ecoPuntos,
+      clientesNuevos: actual.clientesNuevos,
+      deltaPct: {
+        residuosKg: delta(actual.residuosKg, anterior.residuosKg),
+        reciclableKg: delta(actual.reciclableKg, anterior.reciclableKg),
+        ecoPuntos: delta(actual.ecoPuntos, anterior.ecoPuntos),
+      },
       vouchersPorEstado: vouchers,
       ofertasActivas: ofertas,
     };
