@@ -26,6 +26,8 @@ describe('RecoleccionService', () => {
       upsert: vi.fn().mockResolvedValue({}),
     },
     movimientoPuntos: { create: vi.fn().mockResolvedValue({}) },
+    ofertaRecompensa: { findMany: vi.fn().mockResolvedValue([]) },
+    notificacion: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
   };
 
   beforeEach(async () => {

@@ -95,6 +95,7 @@ model User {
   rutasAsignadas      Ruta[]
   vehiculos           Vehiculo[]
   incidencias         Incidencia[]
+  notificaciones      Notificacion[]
 
   puntosBalance EcoPuntosBalance?
 
@@ -213,6 +214,24 @@ model Incidencia {
   @@index([usuarioId, createdAt])
   @@index([estado])
   @@map("incidencias")
+}
+
+// Notificacion al ciudadano cuando alcanza el hito de una recompensa
+// (puntosActuales >= costoPuntos por primera vez). Una por usuario+oferta.
+model Notificacion {
+  id        String   @id @default(uuid())
+  usuarioId String
+  usuario   User     @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  tipo      String // ej. HITO_RECOMPENSA
+  titulo    String
+  mensaje   String
+  ofertaId  String?
+  leida     Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@unique([usuarioId, ofertaId, tipo])
+  @@index([usuarioId, leida])
+  @@map("notificaciones")
 }
 
 // Copaff: cooperativas/asociaciones de recicladores (menu del diseno).

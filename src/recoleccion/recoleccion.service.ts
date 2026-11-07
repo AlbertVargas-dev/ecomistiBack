@@ -284,6 +284,31 @@ export class RecoleccionService {
           },
         });
 
+        // Hito de recompensa: notificar las ofertas que el usuario
+        // puede pagar AHORA y antes no (saldo cruza el costo).
+        const saldoPrevio = balance?.puntosActuales ?? 0;
+        const ofertas = await tx.ofertaRecompensa.findMany({
+          where: {
+            activo: true,
+            dirigidoA: usuario.rol,
+            costoPuntos: { lte: saldoPosterior, gt: saldoPrevio },
+          },
+        });
+        for (const oferta of ofertas) {
+          await tx.notificacion.createMany({
+            data: [
+              {
+                usuarioId: usuario.id,
+                tipo: 'HITO_RECOMPENSA',
+                titulo: '¡Llegaste al hito de una recompensa!',
+                mensaje: `Ya podés canjear "${oferta.titulo}" por ${oferta.costoPuntos} puntos.`,
+                ofertaId: oferta.id,
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
+
         return creada;
       });
 
