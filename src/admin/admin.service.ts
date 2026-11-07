@@ -15,6 +15,7 @@ import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
+import { RutaDto } from './dto/ruta.dto.js';
 import { Granularidad, TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { CreateRecolectorDto } from './dto/create-recolector.dto.js';
@@ -683,11 +684,55 @@ export class AdminService {
         usuario: { select: { nombres: true, apellidos: true } },
         recolector: { select: { nombres: true, apellidos: true } },
         puntoEncuentro: { select: { nombre: true, distrito: true } },
+        ruta: { select: { nombre: true } },
         detalles: true,
       },
       orderBy: { fechaCaptura: 'desc' },
       ...paginacion(q),
     });
+  }
+
+  // --- Rutas (diseño: menú Rutas + columna Ruta en entregas)
+
+  async listarRutas() {
+    return this.prisma.ruta.findMany({
+      include: {
+        recolector: { select: { nombres: true, apellidos: true } },
+        _count: { select: { entregas: true } },
+      },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
+  async crearRuta(admin: AuthUser, dto: RutaDto) {
+    const ruta = await this.prisma.ruta.create({
+      data: {
+        nombre: dto.nombre,
+        zona: dto.zona,
+        recolectorId: dto.recolectorId,
+        estado: dto.estado ?? 'ACTIVA',
+      },
+    });
+    await this.audit(admin.id, 'CREAR_RUTA', 'Ruta', ruta.id, {
+      nombre: dto.nombre,
+    });
+    return ruta;
+  }
+
+  async actualizarRuta(admin: AuthUser, id: string, dto: RutaDto) {
+    const ruta = await this.prisma.ruta.findUnique({ where: { id } });
+    if (!ruta) throw new NotFoundException('Ruta no encontrada');
+    const actualizada = await this.prisma.ruta.update({
+      where: { id },
+      data: {
+        nombre: dto.nombre,
+        zona: dto.zona,
+        recolectorId: dto.recolectorId,
+        estado: dto.estado ?? 'ACTIVA',
+      },
+    });
+    await this.audit(admin.id, 'MODIFICAR_RUTA', 'Ruta', id);
+    return actualizada;
   }
 
   async dashboardClientes(q: PaginacionDto = {}) {
@@ -746,7 +791,7 @@ export class AdminService {
     const [entregas, vouchers, movimientos] = await Promise.all([
       this.prisma.entrega.findMany({
         where: { usuarioId: id },
-        include: { detalles: true },
+        include: { detalles: true, ruta: { select: { nombre: true } } },
         orderBy: { fechaCaptura: 'desc' },
         take: 10,
       }),

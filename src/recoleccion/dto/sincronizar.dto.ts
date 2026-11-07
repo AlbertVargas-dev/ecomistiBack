@@ -39,6 +39,15 @@ export class EntregaSyncDto {
   @IsDateString()
   fechaCaptura: string;
 
+  @ApiPropertyOptional({
+    example: 2.5,
+    description:
+      'Volumen en m³ si el móvil lo mide; si no, el backend lo estima',
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  volumenM3?: number;
+
   @ApiProperty({ type: [DetalleSyncDto] })
   @ValidateNested({ each: true })
   @Type(() => DetalleSyncDto)

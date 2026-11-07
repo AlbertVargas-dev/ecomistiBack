@@ -210,6 +210,9 @@ export class RecoleccionService {
             qrCode: item.qrCode,
             fechaCaptura,
             puntosTotales,
+            // Volumen: del móvil si viene; si no, estimado (2.5 L/kg ≈ 0.0025 m³/kg).
+            volumenM3:
+              item.volumenM3 ?? Math.round(pesoTotal * 0.0025 * 100) / 100,
             detalles: { create: lineas },
           },
         });

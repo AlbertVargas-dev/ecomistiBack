@@ -48,6 +48,11 @@ enum EstadoObra {
   COMPLETADA
 }
 
+enum EstadoRuta {
+  ACTIVA
+  SUSPENDIDA
+}
+
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
@@ -81,6 +86,7 @@ model User {
   auditoriasSobreMi AuditLog[] @relation("AuditoriaUsuario")
 
   factoresComunidades ConfigFactorResiduo[] @relation("FactorCreadoPor")
+  rutasAsignadas      Ruta[]
 
   puntosBalance EcoPuntosBalance?
 
@@ -136,6 +142,10 @@ model Entrega {
   qrCode        String? // QR capturado al momento del pesaje (para detectar QR_INVALIDO)
   fechaCaptura  DateTime // fecha del pesaje en el movil; rige factor y validaciones
   puntosTotales Int      @default(0) // suma de puntosSubtotal (backend siempre recalcula)
+  volumenM3     Float? // volumen estimado o del movil (diseno: columna Volumen)
+
+  rutaId String?
+  ruta   Ruta?   @relation(fields: [rutaId], references: [id], onDelete: Restrict)
 
   estado          EstadoEntrega @default(VALIDA)
   motivoAnulacion String?
@@ -149,7 +159,22 @@ model Entrega {
   @@index([usuarioId, fechaCaptura])
   @@index([recolectorId, fechaCaptura])
   @@index([puntoEncuentroId])
+  @@index([rutaId])
   @@map("entregas")
+}
+
+model Ruta {
+  id           String     @id @default(uuid())
+  nombre       String // ej. "Ruta Sur 1"
+  zona         String?
+  recolectorId String?
+  recolector   User?      @relation(fields: [recolectorId], references: [id], onDelete: Restrict)
+  estado       EstadoRuta @default(ACTIVA)
+  createdAt    DateTime   @default(now())
+
+  entregas Entrega[]
+
+  @@map("rutas")
 }
 
 // Detalles de pesaje: factor congelado en fechaCaptura, max. 20 por entrega.
