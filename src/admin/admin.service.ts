@@ -852,6 +852,37 @@ export class AdminService {
     );
   }
 
+  // --- Incidencias (admin)
+
+  async listarIncidencias(q: PaginacionDto = {}) {
+    return this.prisma.incidencia.findMany({
+      include: {
+        usuario: { select: { nombres: true, apellidos: true, rol: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      ...paginacion(q),
+    });
+  }
+
+  async cambiarEstadoIncidencia(
+    admin: AuthUser,
+    id: string,
+    estado: 'ABIERTA' | 'EN_REVISION' | 'RESUELTA',
+  ) {
+    const incidencia = await this.prisma.incidencia.findUnique({
+      where: { id },
+    });
+    if (!incidencia) throw new NotFoundException('Incidencia no encontrada');
+    const actualizada = await this.prisma.incidencia.update({
+      where: { id },
+      data: { estado },
+    });
+    await this.audit(admin.id, 'GESTIONAR_INCIDENCIA', 'Incidencia', id, {
+      estado,
+    });
+    return actualizada;
+  }
+
   async dashboardClientes(q: PaginacionDto = {}) {
     const clientes = await this.prisma.user.findMany({
       where: { rol: { in: [Role.CIUDADANO, Role.URBANIZACION] } },
