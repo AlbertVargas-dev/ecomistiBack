@@ -107,7 +107,7 @@ export class UsuariosService {
 
   /** Actualizar datos del perfil propio (nombres, apellidos, teléfono). */
   async actualizarPerfil(user: AuthUser, dto: ActualizarPerfilDto) {
-    this.assertActive(user);
+    this.assertNoDesactivado(user);
     const actualizado = await this.prisma.user.update({
       where: { id: user.id },
       data: {
@@ -123,7 +123,7 @@ export class UsuariosService {
 
   /** Cambiar contraseña verificando la actual (nunca se guarda en claro). */
   async cambiarPassword(user: AuthUser, dto: CambiarPasswordDto) {
-    this.assertActive(user);
+    this.assertNoDesactivado(user);
     const actual = await this.prisma.user.findUnique({
       where: { id: user.id },
     });
@@ -164,6 +164,13 @@ export class UsuariosService {
       where: { id },
       data: { leida: true },
     });
+  }
+
+  /** Solo bloquea cuentas desactivadas (el recolector SÍ puede editar su perfil). */
+  private assertNoDesactivado(user: AuthUser & { activo?: boolean }) {
+    if (user.activo === false) {
+      throw new UnauthorizedException('Cuenta desactivada');
+    }
   }
 
   private assertActive(user: AuthUser & { activo?: boolean }) {
