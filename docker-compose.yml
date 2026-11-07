@@ -11,5 +11,6 @@ services:
       - "5432:5432"
     volumes:
       - ecomisti_pgdata:/var/lib/postgresql/data
+      
 volumes:
   ecomisti_pgdata:

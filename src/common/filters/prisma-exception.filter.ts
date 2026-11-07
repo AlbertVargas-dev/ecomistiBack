@@ -1,4 +1,9 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpStatus,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { Response } from 'express';
 
@@ -12,7 +17,9 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     switch (exception.code) {
       case 'P2002': {
         status = HttpStatus.CONFLICT;
-        const target = (exception.meta?.target as string[] | undefined)?.join(', ');
+        const target = (exception.meta?.target as string[] | undefined)?.join(
+          ', ',
+        );
         message =
           'Ya existe un registro con ese valor único' +
           (target ? ' (' + target + ')' : '');
@@ -27,6 +34,8 @@ export class PrismaExceptionFilter implements ExceptionFilter {
         message = 'Referencia a un registro inexistente';
         break;
     }
-    res.status(status).json({ statusCode: status, message, error: exception.code });
+    res
+      .status(status)
+      .json({ statusCode: status, message, error: exception.code });
   }
 }

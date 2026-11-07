@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ecomisti
+          POSTGRES_PASSWORD: ecomisti
+          POSTGRES_DB: ecomisti
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U ecomisti"
+          --health-interval=5s --health-retries=5
+    env:
+      DATABASE_URL: postgresql://ecomisti:ecomisti@localhost:5432/ecomisti
+      JWT_SECRET: ci-only-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prisma migrate deploy
+      - run: pnpm exec prisma generate
+      - run: pnpm exec tsc --noEmit -p tsconfig.json
+      - run: pnpm run lint
+      - run: pnpm run test
