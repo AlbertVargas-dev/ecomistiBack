@@ -22,3 +22,7 @@ dist/
 GUIA_DESARROLLO.md
 guia_desarrollo.md
 
+# Documentación local (vault Obsidian): no se versiona
+docs/
+
+
