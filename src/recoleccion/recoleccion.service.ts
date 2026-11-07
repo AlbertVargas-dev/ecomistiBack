@@ -73,6 +73,19 @@ export class RecoleccionService {
     };
   }
 
+  /** Entregas registradas por este recolector (panel/home del recolector). */
+  async misEntregas(recolectorId: string) {
+    return this.prisma.entrega.findMany({
+      where: { recolectorId },
+      include: {
+        usuario: { select: { nombres: true, apellidos: true } },
+        detalles: true,
+      },
+      orderBy: { fechaCaptura: 'desc' },
+      take: 50,
+    });
+  }
+
   /**
    * Sincronizar entregas offline (spec §7): responde UN resultado por ítem
    * (HTTP 200 aunque algunas fallen). Cada entrega va en su propia transacción.
