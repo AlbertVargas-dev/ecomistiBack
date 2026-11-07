@@ -77,4 +77,20 @@ export class RegisterDto {
   @IsBoolean({ message: 'Debe aceptar los términos' })
   @Equals(true, { message: 'Debe aceptar el tratamiento de datos personales' })
   aceptoTerminos: boolean;
+
+  // Solo URBANIZACION: a qué urbanización pertenece el representante legal.
+  @ApiPropertyOptional({ description: 'ID de una urbanización existente' })
+  @IsOptional()
+  @IsString()
+  urbanizacionId?: string;
+
+  @ApiPropertyOptional({ example: 'Urb. Los Jardines de Paucarpata' })
+  @IsOptional()
+  @IsString()
+  nombreUrbanizacion?: string;
+
+  @ApiPropertyOptional({ example: 'Av. Jesús 123, Paucarpata' })
+  @IsOptional()
+  @IsString()
+  direccionUrbanizacion?: string;
 }
