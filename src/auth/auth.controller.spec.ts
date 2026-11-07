@@ -38,6 +38,7 @@ describe('AuthController', () => {
       nombres: 'Test',
       apellidos: 'User',
       dni: '12345678',
+      aceptoTerminos: true,
     };
     authService.register.mockResolvedValue({ accessToken: 'token' });
 
@@ -60,7 +61,10 @@ describe('AuthController', () => {
 
   it('getProfile y getMe deben retornar el perfil del usuario autenticado', async () => {
     const user = { id: 'u1', email: 'test@test.com', rol: Role.CIUDADANO };
-    authService.getProfile.mockResolvedValue({ id: 'u1', email: 'test@test.com' });
+    authService.getProfile.mockResolvedValue({
+      id: 'u1',
+      email: 'test@test.com',
+    });
 
     const profile = await controller.getProfile(user);
     const me = await controller.getMe(user);
