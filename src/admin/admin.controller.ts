@@ -96,6 +96,12 @@ export class AdminController {
     return this.adminService.crearStaff(admin, dto, Role.RENTAS);
   }
 
+  @Get('ofertas')
+  @ApiOperation({ summary: 'Listar todas las ofertas (admin)' })
+  listarOfertas(@Query() q: PaginacionDto) {
+    return this.adminService.listarOfertas(q);
+  }
+
   @Post('ofertas')
   @ApiOperation({ summary: 'Publicar oferta' })
   crearOferta(@CurrentUser() admin: AuthUser, @Body() dto: CreateOfertaDto) {
