@@ -34,16 +34,42 @@ export class RecoleccionService {
   async identificarQr(dto: IdentificarQrDto) {
     const user = await this.prisma.user.findUnique({
       where: { qrCode: dto.qrCode },
-      select: { nombres: true, apellidos: true, rol: true },
+      select: { nombres: true, apellidos: true, rol: true, qrCode: true },
     });
     if (!user) {
       throw new NotFoundException('QR no encontrado');
     }
+    return this.resumenIdentificado(user);
+  }
+
+  /**
+   * Identificar por DNI (alternativa al escaneo): el DNI es único,
+   * por lo que identifica a la misma cuenta que el QR.
+   */
+  async identificarDni(dni: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { dni },
+      select: { nombres: true, apellidos: true, rol: true, qrCode: true },
+    });
+    if (!user) {
+      throw new NotFoundException('DNI no encontrado');
+    }
+    return this.resumenIdentificado(user);
+  }
+
+  private resumenIdentificado(user: {
+    nombres: string;
+    apellidos: string;
+    rol: string;
+    qrCode: string;
+  }) {
     const primerNombre = user.nombres.split(' ')[0] ?? user.nombres;
     const inicialApellido = user.apellidos.charAt(0);
     return {
       nombreParcial: `${primerNombre} ${inicialApellido}.`,
       tipoCuenta: user.rol,
+      // El recolector necesita el qrCode para sincronizar la entrega.
+      qrCode: user.qrCode,
     };
   }
 
