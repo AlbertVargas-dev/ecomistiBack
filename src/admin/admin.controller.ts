@@ -24,6 +24,7 @@ import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
+import { RutaDto } from './dto/ruta.dto.js';
 import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -180,6 +181,28 @@ export class AdminController {
   @ApiOperation({ summary: 'Tabla de entregas con filtros y paginación' })
   listarEntregas(@Query() q: EntregasQueryDto) {
     return this.adminService.listarEntregas(q);
+  }
+
+  @Get('rutas')
+  @ApiOperation({ summary: 'Listar rutas con recolector y conteo de entregas' })
+  listarRutas() {
+    return this.adminService.listarRutas();
+  }
+
+  @Post('rutas')
+  @ApiOperation({ summary: 'Crear ruta' })
+  crearRuta(@CurrentUser() admin: AuthUser, @Body() dto: RutaDto) {
+    return this.adminService.crearRuta(admin, dto);
+  }
+
+  @Patch('rutas/:id')
+  @ApiOperation({ summary: 'Modificar ruta (asignar recolector, estado)' })
+  actualizarRuta(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: RutaDto,
+  ) {
+    return this.adminService.actualizarRuta(admin, id, dto);
   }
 
   @Get('dashboard/clientes')
