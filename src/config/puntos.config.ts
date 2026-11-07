@@ -1,11 +1,13 @@
 import { TipoResiduo } from '@prisma/client';
 
-/** EcoPuntos otorgados por kilogramo según el tipo de residuo. Ajustable. */
+/**
+ * EcoPuntos por kg según tipo de residuo (spec §5: RECICLABLE 10, ORGANICO 5).
+ * NOTA: con la tabla ConfigFactorResiduo versionada, el factor vigente en
+ * fechaCaptura debe leerse de BD; esta constante queda como fallback/seed.
+ */
 export const PUNTOS_POR_KG: Record<TipoResiduo, number> = {
-  PLASTICO: 10,
-  CARTON: 5,
-  VIDRIO: 4,
-  METAL: 15,
+  RECICLABLE: 10,
+  ORGANICO: 5,
 };
 
 export function calcularPuntos(tipo: TipoResiduo, pesoKg: number): number {
