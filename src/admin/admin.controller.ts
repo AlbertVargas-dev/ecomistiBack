@@ -153,9 +153,11 @@ export class AdminController {
   }
 
   @Get('reportes/residuos')
-  @ApiOperation({ summary: 'Reporte: kg/puntos por tipo y top recolectores' })
-  reporteResiduos() {
-    return this.adminService.reporteResiduos();
+  @ApiOperation({
+    summary: 'Reporte: kg/puntos por tipo y top recolectores (con filtros)',
+  })
+  reporteResiduos(@Query() q: ResumenQueryDto) {
+    return this.adminService.reporteResiduos(q);
   }
 
   @Get('auditoria')
