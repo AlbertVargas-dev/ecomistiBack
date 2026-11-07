@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AdminService } from './admin.service.js';
+import { CacheService } from '../common/cache/cache.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 describe('AdminService.tendencia', () => {
@@ -12,7 +13,11 @@ describe('AdminService.tendencia', () => {
   beforeEach(async () => {
     prisma = { detalleEntrega: { findMany: vi.fn() } };
     const module: TestingModule = await Test.createTestingModule({
-      providers: [AdminService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        AdminService,
+        { provide: PrismaService, useValue: prisma },
+        CacheService,
+      ],
     }).compile();
     service = module.get<AdminService>(AdminService);
   });
