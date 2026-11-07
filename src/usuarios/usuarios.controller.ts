@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -46,6 +54,13 @@ export class UsuariosController {
   }
 
   @Patch('me')
+  @Roles(
+    Role.ADMIN,
+    Role.RECOLECTOR,
+    Role.CIUDADANO,
+    Role.URBANIZACION,
+    Role.RENTAS,
+  )
   @ApiOperation({
     summary: 'Actualizar mis datos (nombres, apellidos, teléfono)',
   })
@@ -57,6 +72,13 @@ export class UsuariosController {
   }
 
   @Patch('me/cambiar-password')
+  @Roles(
+    Role.ADMIN,
+    Role.RECOLECTOR,
+    Role.CIUDADANO,
+    Role.URBANIZACION,
+    Role.RENTAS,
+  )
   @ApiOperation({ summary: 'Cambiar mi contraseña (verifica la actual)' })
   cambiarPassword(
     @CurrentUser() user: AuthUser,
