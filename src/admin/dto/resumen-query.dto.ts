@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional } from 'class-validator';
+import { IsDateString, IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -15,4 +15,12 @@ export class ResumenQueryDto {
   @IsOptional()
   @IsDateString()
   hasta?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filtrar por distrito/zona del punto de encuentro',
+    example: 'Paucarpata',
+  })
+  @IsOptional()
+  @IsString()
+  distrito?: string;
 }

@@ -215,6 +215,19 @@ model Incidencia {
   @@map("incidencias")
 }
 
+// Copaff: cooperativas/asociaciones de recicladores (menu del diseno).
+model Cooperativa {
+  id        String   @id @default(uuid())
+  nombre    String
+  ruc       String?  @unique
+  direccion String?
+  telefono  String?
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@map("cooperativas")
+}
+
 // Detalles de pesaje: factor congelado en fechaCaptura, max. 20 por entrega.
 model DetalleEntrega {
   id        String  @id @default(uuid())
