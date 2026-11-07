@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -21,6 +28,12 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 @Controller('recoleccion')
 export class RecoleccionController {
   constructor(private readonly recoleccionService: RecoleccionService) {}
+
+  @Get('mis-entregas')
+  @ApiOperation({ summary: 'Entregas registradas por este recolector' })
+  misEntregas(@CurrentUser() user: AuthUser) {
+    return this.recoleccionService.misEntregas(user.id);
+  }
 
   @Post('identificar-qr')
   @ApiOperation({
