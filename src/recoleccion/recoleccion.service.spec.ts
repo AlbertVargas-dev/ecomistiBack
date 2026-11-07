@@ -237,6 +237,25 @@ describe('RecoleccionService', () => {
     );
   });
 
+  it('identificarDni devuelve nombre parcial, tipo y qrCode (alternativa al escaneo)', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      nombres: 'María',
+      apellidos: 'Flores',
+      rol: Role.CIUDADANO,
+      qrCode: QR,
+    });
+    const res = await service.identificarDni('12345678');
+    expect(res).toEqual({
+      nombreParcial: 'María F.',
+      tipoCuenta: 'CIUDADANO',
+      qrCode: QR,
+    });
+    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+      where: { dni: '12345678' },
+      select: expect.anything(),
+    });
+  });
+
   it('identificarQr devuelve solo nombre parcial y tipo de cuenta', async () => {
     prisma.user.findUnique.mockResolvedValue({
       nombres: 'Juan Carlos',
