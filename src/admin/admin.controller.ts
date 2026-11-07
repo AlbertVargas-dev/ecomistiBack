@@ -24,7 +24,9 @@ import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
+import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
 import { RutaDto } from './dto/ruta.dto.js';
+import { VehiculoDto } from './dto/vehiculo.dto.js';
 import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -203,6 +205,52 @@ export class AdminController {
     @Body() dto: RutaDto,
   ) {
     return this.adminService.actualizarRuta(admin, id, dto);
+  }
+
+  @Post('puntos-encuentro')
+  @ApiOperation({ summary: 'Crear punto de EcoReciclaje' })
+  crearPunto(@CurrentUser() admin: AuthUser, @Body() dto: CreatePuntoDto) {
+    return this.adminService.crearPunto(admin, dto);
+  }
+
+  @Patch('puntos-encuentro/:id')
+  @ApiOperation({ summary: 'Modificar punto (activar/desactivar)' })
+  actualizarPunto(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CreatePuntoDto,
+  ) {
+    return this.adminService.actualizarPunto(admin, id, dto);
+  }
+
+  @Get('vehiculos')
+  @ApiOperation({ summary: 'Listar vehículos con recolector asignado' })
+  listarVehiculos() {
+    return this.adminService.listarVehiculos();
+  }
+
+  @Post('vehiculos')
+  @ApiOperation({ summary: 'Crear vehículo' })
+  crearVehiculo(@CurrentUser() admin: AuthUser, @Body() dto: VehiculoDto) {
+    return this.adminService.crearVehiculo(admin, dto);
+  }
+
+  @Patch('vehiculos/:id')
+  @ApiOperation({ summary: 'Modificar vehículo' })
+  actualizarVehiculo(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: VehiculoDto,
+  ) {
+    return this.adminService.actualizarVehiculo(admin, id, dto);
+  }
+
+  @Get('recolectores')
+  @ApiOperation({
+    summary: 'Personal: recolectores con total y última entrega',
+  })
+  listarRecolectores() {
+    return this.adminService.listarRecolectores();
   }
 
   @Get('dashboard/clientes')
