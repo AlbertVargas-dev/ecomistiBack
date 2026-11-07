@@ -59,6 +59,7 @@ export class AdminService {
         dni: dto.dni,
         telefono: dto.telefono,
         rol: Role.RECOLECTOR,
+        cooperativaId: dto.cooperativaId,
         perfilRecolector: {
           create: {
             dni: dto.dni,
@@ -413,7 +414,9 @@ export class AdminService {
    */
   async dashboardResumen(q: ResumenQueryDto = {}) {
     const claveCache = `resumen:${q.desde ?? ''}:${q.hasta ?? ''}:${q.distrito ?? ''}`;
-    const enCache = this.cache.get<Record<string, unknown>>(claveCache) as Awaited<ReturnType<AdminService['calcularResumen']>> | null;
+    const enCache = this.cache.get<Record<string, unknown>>(
+      claveCache,
+    ) as Awaited<ReturnType<AdminService['calcularResumen']>> | null;
     if (enCache) return enCache;
     const resultado = await this.calcularResumen(q);
     return this.cache.set(claveCache, resultado);
@@ -519,7 +522,9 @@ export class AdminService {
    */
   async tendencia(q: TendenciaQueryDto = {}) {
     const claveCache = `tendencia:${q.desde ?? ''}:${q.hasta ?? ''}:${q.granularidad ?? 'dia'}`;
-    const enCache = this.cache.get<Record<string, unknown>>(claveCache) as Awaited<ReturnType<AdminService['calcularTendencia']>> | null;
+    const enCache = this.cache.get<Record<string, unknown>>(
+      claveCache,
+    ) as Awaited<ReturnType<AdminService['calcularTendencia']>> | null;
     if (enCache) return enCache;
     const resultado = await this.calcularTendencia(q);
     return this.cache.set(claveCache, resultado);
@@ -618,7 +623,9 @@ export class AdminService {
    * alta/media/baja según terciles del máximo (para pins del mapa).
    */
   async mapaCalor() {
-    const enCache = this.cache.get<Record<string, unknown>>('mapa-calor') as Awaited<ReturnType<AdminService['calcularMapaCalor']>> | null;
+    const enCache = this.cache.get<Record<string, unknown>>(
+      'mapa-calor',
+    ) as Awaited<ReturnType<AdminService['calcularMapaCalor']>> | null;
     if (enCache) return enCache;
     const resultado = await this.calcularMapaCalor();
     return this.cache.set('mapa-calor', resultado, 60_000);
@@ -919,7 +926,60 @@ export class AdminService {
   // --- Copaff: cooperativas (menu del diseno)
 
   async listarCooperativas() {
-    return this.prisma.cooperativa.findMany({ orderBy: { nombre: 'asc' } });
+    return this.prisma.cooperativa.findMany({
+      include: { _count: { select: { miembros: true } } },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
+  /** Miembros (recolectores) de una cooperativa: así se forman. */
+  async miembrosCooperativa(id: string) {
+    const cooperativa = await this.prisma.cooperativa.findUnique({
+      where: { id },
+    });
+    if (!cooperativa) throw new NotFoundException('Cooperativa no encontrada');
+    return this.prisma.user.findMany({
+      where: { cooperativaId: id },
+      select: {
+        id: true,
+        nombres: true,
+        apellidos: true,
+        dni: true,
+        telefono: true,
+        activo: true,
+        _count: { select: { entregasRegistradas: true } },
+      },
+      orderBy: { nombres: 'asc' },
+    });
+  }
+
+  /** Asignar (o quitar, con null) un recolector a su cooperativa. */
+  async asignarCooperativa(
+    admin: AuthUser,
+    userId: string,
+    cooperativaId: string | null,
+  ) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || user.rol !== Role.RECOLECTOR) {
+      throw new NotFoundException('Recolector no encontrado');
+    }
+    if (cooperativaId) {
+      const cooperativa = await this.prisma.cooperativa.findUnique({
+        where: { id: cooperativaId },
+      });
+      if (!cooperativa) {
+        throw new NotFoundException('Cooperativa no encontrada');
+      }
+    }
+    const actualizado = await this.prisma.user.update({
+      where: { id: userId },
+      data: { cooperativaId },
+    });
+    await this.audit(admin.id, 'ASIGNAR_COOPERATIVA', 'User', userId, {
+      cooperativaId,
+    });
+    const { passwordHash: _ph, ...sanitized } = actualizado;
+    return sanitized;
   }
 
   async crearCooperativa(admin: AuthUser, dto: CooperativaDto) {

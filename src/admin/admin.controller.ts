@@ -31,6 +31,7 @@ import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
 import { RutaDto } from './dto/ruta.dto.js';
 import { VehiculoDto } from './dto/vehiculo.dto.js';
 import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
+import { AsignarCooperativaDto } from './dto/asignar-cooperativa.dto.js';
 import { CooperativaDto } from './dto/cooperativa.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -321,6 +322,28 @@ export class AdminController {
   })
   buscar(@Query('q') q: string) {
     return this.adminService.buscar(q ?? '');
+  }
+
+  @Get('cooperativas/:id/miembros')
+  @ApiOperation({ summary: 'Miembros (recolectores) de una cooperativa' })
+  miembrosCooperativa(@Param('id') id: string) {
+    return this.adminService.miembrosCooperativa(id);
+  }
+
+  @Patch('recolectores/:id/cooperativa')
+  @ApiOperation({
+    summary: 'Asignar (o quitar) un recolector a su cooperativa',
+  })
+  asignarCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: AsignarCooperativaDto,
+  ) {
+    return this.adminService.asignarCooperativa(
+      admin,
+      id,
+      dto.cooperativaId ?? null,
+    );
   }
 
   @Get('dashboard/clientes')
