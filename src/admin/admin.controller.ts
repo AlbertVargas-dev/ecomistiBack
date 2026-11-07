@@ -23,6 +23,7 @@ import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
+import { EntregasQueryDto } from './dto/entregas-query.dto.js';
 import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -164,6 +165,21 @@ export class AdminController {
   })
   tendencia(@Query() q: TendenciaQueryDto) {
     return this.adminService.tendencia(q);
+  }
+
+  @Get('estadisticas/mapa-calor')
+  @ApiOperation({
+    summary:
+      'Kg por punto de encuentro con nivel alta/media/baja (pins del mapa)',
+  })
+  mapaCalor() {
+    return this.adminService.mapaCalor();
+  }
+
+  @Get('entregas')
+  @ApiOperation({ summary: 'Tabla de entregas con filtros y paginación' })
+  listarEntregas(@Query() q: EntregasQueryDto) {
+    return this.adminService.listarEntregas(q);
   }
 
   @Get('dashboard/clientes')
