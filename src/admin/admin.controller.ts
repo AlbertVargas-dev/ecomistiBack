@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -29,6 +31,7 @@ import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
 import { RutaDto } from './dto/ruta.dto.js';
 import { VehiculoDto } from './dto/vehiculo.dto.js';
 import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
+import { CooperativaDto } from './dto/cooperativa.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -268,6 +271,56 @@ export class AdminController {
     @Body() dto: EstadoIncidenciaDto,
   ) {
     return this.adminService.cambiarEstadoIncidencia(admin, id, dto.estado);
+  }
+
+  @Get('cooperativas')
+  @ApiOperation({ summary: 'Listar cooperativas (Copaff)' })
+  listarCooperativas() {
+    return this.adminService.listarCooperativas();
+  }
+
+  @Post('cooperativas')
+  @ApiOperation({ summary: 'Crear cooperativa' })
+  crearCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Body() dto: CooperativaDto,
+  ) {
+    return this.adminService.crearCooperativa(admin, dto);
+  }
+
+  @Patch('cooperativas/:id')
+  @ApiOperation({ summary: 'Modificar cooperativa' })
+  actualizarCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CooperativaDto,
+  ) {
+    return this.adminService.actualizarCooperativa(admin, id, dto);
+  }
+
+  @Get('reportes/exportar')
+  @ApiOperation({ summary: 'Exportar reporte de recolecciones (csv|xlsx)' })
+  async exportarReporte(
+    @Query('formato') formato: 'csv' | 'xlsx' = 'csv',
+    @Res() res: Response,
+  ) {
+    const { contentType, filename, body } =
+      await this.adminService.exportarReporte(
+        formato === 'xlsx' ? 'xlsx' : 'csv',
+      );
+    res
+      .status(200)
+      .setHeader('Content-Type', contentType)
+      .setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(body);
+  }
+
+  @Get('buscar')
+  @ApiOperation({
+    summary: 'Búsqueda global (usuarios, entregas, vouchers, puntos)',
+  })
+  buscar(@Query('q') q: string) {
+    return this.adminService.buscar(q ?? '');
   }
 
   @Get('dashboard/clientes')

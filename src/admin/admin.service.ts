@@ -14,6 +14,7 @@ import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
+import { CooperativaDto } from './dto/cooperativa.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
 import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
 import { RutaDto } from './dto/ruta.dto.js';
@@ -422,17 +423,22 @@ export class AdminService {
 
     const rango = (d: Date, h: Date) => ({ gte: d, lte: h });
 
+    const filtroEntrega = (d: Date, h: Date) => ({
+      fechaCaptura: rango(d, h),
+      ...(q.distrito ? { puntoEncuentro: { distrito: q.distrito } } : {}),
+    });
+
     const metricas = async (d: Date, h: Date) => {
       const [kgTotales, kgReciclable, puntos, entregas, clientesNuevos] =
         await Promise.all([
           this.prisma.detalleEntrega.aggregate({
-            where: { entrega: { fechaCaptura: rango(d, h) } },
+            where: { entrega: filtroEntrega(d, h) },
             _sum: { pesoKg: true },
           }),
           this.prisma.detalleEntrega.aggregate({
             where: {
               tipoResiduo: 'RECICLABLE',
-              entrega: { fechaCaptura: rango(d, h) },
+              entrega: filtroEntrega(d, h),
             },
             _sum: { pesoKg: true },
           }),
@@ -441,7 +447,7 @@ export class AdminService {
             _sum: { monto: true },
           }),
           this.prisma.entrega.count({
-            where: { fechaCaptura: rango(d, h) },
+            where: filtroEntrega(d, h),
           }),
           this.prisma.user.count({
             where: {
@@ -881,6 +887,182 @@ export class AdminService {
       estado,
     });
     return actualizada;
+  }
+
+  // --- Copaff: cooperativas (menu del diseno)
+
+  async listarCooperativas() {
+    return this.prisma.cooperativa.findMany({ orderBy: { nombre: 'asc' } });
+  }
+
+  async crearCooperativa(admin: AuthUser, dto: CooperativaDto) {
+    const cooperativa = await this.prisma.cooperativa.create({
+      data: {
+        nombre: dto.nombre,
+        ruc: dto.ruc,
+        direccion: dto.direccion,
+        telefono: dto.telefono,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(
+      admin.id,
+      'CREAR_COOPERATIVA',
+      'Cooperativa',
+      cooperativa.id,
+      {
+        nombre: dto.nombre,
+      },
+    );
+    return cooperativa;
+  }
+
+  async actualizarCooperativa(
+    admin: AuthUser,
+    id: string,
+    dto: CooperativaDto,
+  ) {
+    const cooperativa = await this.prisma.cooperativa.findUnique({
+      where: { id },
+    });
+    if (!cooperativa) throw new NotFoundException('Cooperativa no encontrada');
+    const actualizada = await this.prisma.cooperativa.update({
+      where: { id },
+      data: {
+        nombre: dto.nombre,
+        ruc: dto.ruc,
+        direccion: dto.direccion,
+        telefono: dto.telefono,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(admin.id, 'MODIFICAR_COOPERATIVA', 'Cooperativa', id);
+    return actualizada;
+  }
+
+  // --- Exportar reporte (diseno: boton Exportar Reporte)
+
+  async exportarReporte(formato: 'csv' | 'xlsx') {
+    const entregas = await this.prisma.entrega.findMany({
+      include: {
+        usuario: { select: { nombres: true, apellidos: true } },
+        recolector: { select: { nombres: true, apellidos: true } },
+        puntoEncuentro: { select: { nombre: true, distrito: true } },
+        detalles: true,
+      },
+      orderBy: { fechaCaptura: 'desc' },
+    });
+
+    const filas = entregas.map((e) => ({
+      id: e.id,
+      fecha: e.fechaCaptura.toISOString(),
+      usuario: `${e.usuario.nombres} ${e.usuario.apellidos}`,
+      recolector: `${e.recolector.nombres} ${e.recolector.apellidos}`,
+      punto: e.puntoEncuentro?.nombre ?? '',
+      distrito: e.puntoEncuentro?.distrito ?? '',
+      tipos: e.detalles.map((d) => d.tipoResiduo).join(', '),
+      pesoKg: e.detalles.reduce((s, d) => s + Number(d.pesoKg), 0),
+      volumenM3: e.volumenM3 ?? '',
+      puntos: e.puntosTotales,
+      estado: e.estado,
+    }));
+
+    if (formato === 'csv') {
+      const headers = Object.keys(filas[0] ?? { id: '' });
+      const csv = [
+        headers.join(','),
+        ...filas.map((f) =>
+          headers
+            .map(
+              (h) =>
+                `"${String(f[h as keyof typeof f]).replaceAll('"', '""')}"`,
+            )
+            .join(','),
+        ),
+      ].join('\n');
+      return {
+        contentType: 'text/csv; charset=utf-8',
+        filename: 'reporte-recolecciones.csv',
+        body: Buffer.from(csv, 'utf-8'),
+      };
+    }
+
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const hoja = workbook.addWorksheet('Recolecciones');
+    hoja.columns = [
+      { header: 'ID', key: 'id' },
+      { header: 'Fecha', key: 'fecha' },
+      { header: 'Usuario', key: 'usuario' },
+      { header: 'Recolector', key: 'recolector' },
+      { header: 'Punto', key: 'punto' },
+      { header: 'Distrito', key: 'distrito' },
+      { header: 'Tipos', key: 'tipos' },
+      { header: 'Peso (kg)', key: 'pesoKg' },
+      { header: 'Volumen (m3)', key: 'volumenM3' },
+      { header: 'Puntos', key: 'puntos' },
+      { header: 'Estado', key: 'estado' },
+    ];
+    hoja.addRows(filas);
+    const buffer = await workbook.xlsx.writeBuffer();
+    return {
+      contentType:
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      filename: 'reporte-recolecciones.xlsx',
+      body: Buffer.from(buffer),
+    };
+  }
+
+  // --- Busqueda global (header del diseno)
+
+  async buscar(q: string) {
+    const term = q.trim();
+    if (!term) return { usuarios: [], entregas: [], vouchers: [], puntos: [] };
+    const [usuarios, entregas, vouchers, puntos] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          OR: [
+            { nombres: { contains: term, mode: 'insensitive' } },
+            { apellidos: { contains: term, mode: 'insensitive' } },
+            { email: { contains: term, mode: 'insensitive' } },
+          ],
+        },
+        select: {
+          id: true,
+          nombres: true,
+          apellidos: true,
+          email: true,
+          rol: true,
+        },
+        take: 5,
+      }),
+      this.prisma.entrega.findMany({
+        where: { id: { contains: term } },
+        select: {
+          id: true,
+          fechaCaptura: true,
+          puntosTotales: true,
+          estado: true,
+        },
+        take: 5,
+      }),
+      this.prisma.voucherCanje.findMany({
+        where: { codigoVoucher: { contains: term } },
+        select: { id: true, codigoVoucher: true, estado: true },
+        take: 5,
+      }),
+      this.prisma.puntoEncuentro.findMany({
+        where: {
+          OR: [
+            { nombre: { contains: term, mode: 'insensitive' } },
+            { distrito: { contains: term, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true, nombre: true, distrito: true },
+        take: 5,
+      }),
+    ]);
+    return { usuarios, entregas, vouchers, puntos };
   }
 
   async dashboardClientes(q: PaginacionDto = {}) {
