@@ -1,3 +1,42 @@
+// ============================================================================
+// EcoMisti — schema Prisma (spec MVP: docs/02_Reglas_de_Negocio_y_Seguridad.md)
+// ----------------------------------------------------------------------------
+// CAMBIOS vs modelo anterior (anotado según lo pedido):
+// [S1] Role: se agregan URBANIZACION y RENTAS (spec §3). Antes: ADMIN, RECOLECTOR, CIUDADANO.
+// [S2] TipoResiduo: PLASTICO/CARTON/VIDRIO/METAL -> RECICLABLE/ORGANICO (spec §5).
+//      El factor por kg ya no es una constante: vive versionado en ConfigFactorResiduo.
+// [S3] EstadoCanje (PENDIENTE/APROBADO/RECHAZADO) -> EstadoVoucher
+//      (EMITIDO/APLICADO/VENCIDO/CANCELADO) con transiciones de la spec §8.
+// [S4] Nuevos enums: TipoMovimiento (ledger §6), EstadoEntrega (VALIDA/ANULADA, §10),
+//      EstadoObra (PENDIENTE/EN_EJECUCION/COMPLETADA, §8, solo urbanizaciones).
+// [S5] User: + qrCode @unique (UUID regenerable, §4), activo (baja lógica, §2.4/§11),
+//      intentosFallidos/bloqueadoHasta (§4), desactivadoAt (§4, revocación de recolector),
+//      aceptoTerminosAt (consentimiento Ley 29733, §11). Ya no se borran usuarios.
+// [S6] NUEVO PerfilRecolector 1:1 (dni, zonaCamion, pinHash) — spec §2/§16.
+// [S7] Pesaje -> Entrega: + idempotencyKey @unique y deviceId (sync offline §7),
+//      qrCode capturado, fechaCaptura (fecha del pesaje, no de carga), estado/motivoAnulacion/
+//      anuladoPor (anulación §10), puntosTotales. Índices (usuario,fechaCaptura) y
+//      (recolector,fechaCaptura) según spec §13. puntoEncuentroId queda opcional.
+// [S8] NUEVO DetalleEntrega: líneas de pesaje con peso Decimal(8,2), factor y
+//      puntosSubtotal por línea; puntosTotales = suma (spec §5). Máx. 20 por entrega.
+// [S9] NUEVO ConfigFactorResiduo: factores versionados por vigenteDesde; el aplicable
+//      es el vigente en fechaCaptura, nunca se editan (spec §5).
+// [S10] NUEVO MovimientoPuntos (ledger §6): todo cambio de EcoPuntosBalance exige un
+//      movimiento en la misma $transaction; inmutable (se corrige con movimiento inverso).
+// [S11] Beneficio -> OfertaRecompensa: puntosCosto -> costoPuntos; + dirigidoA (rol),
+//      stockDisponible (null = ilimitado), fechaInicio/fechaFin, limitePorUsuario,
+//      diasVigenciaVoucher (default 90) — spec §8.
+// [S12] Canje -> VoucherCanje: + codigoVoucher @unique, fechaVencimiento, fechaAplicacion,
+//      aplicadoPor, motivoCancelacion, canceladoPor, estadoObra — spec §8.
+// [S13] NUEVO AuditLog (§12): acciones criticas (admin, recolector, oferta, factor,
+//      anulacion, voucher, QR). detalle Json opcional.
+// [S14] onDelete: EcoPuntosBalance.user Cascade -> Restrict (spec §2.4/§13, valor
+//      tributario: no se borra historial). Resto de FKs ya eran Restrict, se mantiene.
+// [S15] Tablas físicas: @@map en snake_case para las nuevas; las renombradas
+//      (pesajes->entregas, beneficios->ofertas, canjes->vouchers) cambian de tabla.
+//      Requiere migracion nueva; la migracion init queda como historial.
+// ============================================================================
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -7,117 +46,303 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// [S1] Roles MVP: ADMIN, RECOLECTOR, CIUDADANO, URBANIZACION, RENTAS (spec §3)
 enum Role {
   ADMIN
   RECOLECTOR
   CIUDADANO
+  URBANIZACION
+  RENTAS
 }
 
+// [S2] Tipos de residuo MVP (spec §5). Reemplaza PLASTICO/CARTON/VIDRIO/METAL.
 enum TipoResiduo {
-  PLASTICO
-  CARTON
-  VIDRIO
-  METAL
+  RECICLABLE
+  ORGANICO
 }
 
-enum EstadoCanje {
+// [S3] Ciclo de vida del voucher (spec §8). Reemplaza EstadoCanje.
+enum EstadoVoucher {
+  EMITIDO
+  APLICADO
+  VENCIDO
+  CANCELADO
+}
+
+// [S10] Tipos de movimiento del ledger (spec §6)
+enum TipoMovimiento {
+  ACREDITO
+  CANJE
+  REVERSA_ENTREGA
+  REVERSA_CANJE
+  AJUSTE
+}
+
+// [S4] Estado de la entrega (spec §10)
+enum EstadoEntrega {
+  VALIDA
+  ANULADA
+}
+
+// [S4] Seguimiento de obra de urbanizaciones (spec §8)
+enum EstadoObra {
   PENDIENTE
-  APROBADO
-  RECHAZADO
+  EN_EJECUCION
+  COMPLETADA
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String  @id @default(uuid())
+  email        String  @unique
   passwordHash String
   nombres      String
   apellidos    String
-  dni          String   @unique
+  dni          String  @unique
   telefono     String?
-  rol          Role     @default(CIUDADANO)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  rol          Role    @default(CIUDADANO)
 
-  pesajesRegistrados Pesaje[]          @relation("RecolectorPesajes")
-  pesajesEntregados  Pesaje[]          @relation("CiudadanoPesajes")
-  canjesSolicitados  Canje[]
-  puntosBalance      EcoPuntosBalance?
+  // [S5] Identidad QR + baja lógica + seguridad (spec §4/§11)
+  qrCode           String    @unique @default(uuid()) // regenerable; el anterior queda invalido
+  activo           Boolean   @default(true) // false = desactivado (no se borra: valor tributario)
+  intentosFallidos Int       @default(0) // bloqueo tras 5 fallos (§4)
+  bloqueadoHasta   DateTime?
+  desactivadoAt    DateTime? // revocacion de recolector: sync acepta fechaCaptura anterior (§7)
+  aceptoTerminosAt DateTime? // consentimiento Ley 29733 (§11)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // [S6] Perfil de recolector (1:1, solo rol RECOLECTOR)
+  perfilRecolector PerfilRecolector?
+
+  // [S7] Entregas: como recolector y como dueno de la cuenta (nombres de relacion explicitos)
+  entregasRegistradas Entrega[] @relation("RecolectorEntregas")
+  entregas            Entrega[] @relation("UsuarioEntregas")
+
+  // [S10] Ledger de puntos del usuario
+  movimientos MovimientoPuntos[]
+
+  // [S12] Vouchers emitidos a este usuario
+  vouchers VoucherCanje[]
+
+  // [S13] Auditoria: acciones realizadas / sobre este usuario
+  auditorias        AuditLog[] @relation("AuditoriaActor")
+  auditoriasSobreMi AuditLog[] @relation("AuditoriaUsuario")
+
+  // [S9] Factores creados por este admin
+  factoresComunidades ConfigFactorResiduo[] @relation("FactorCreadoPor")
+
+  puntosBalance EcoPuntosBalance?
 
   @@map("users")
 }
 
+// [S6] Perfil del recolector (spec §2/§16): DNI + PIN hasheado (nunca texto plano, §4)
+model PerfilRecolector {
+  id        String @id @default(uuid())
+  usuarioId String @unique
+  usuario   User   @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+
+  dni        String  @unique // 8 digitos (§11)
+  nombres    String
+  telefono   String?
+  zonaCamion String?
+  pinHash    String // hash bcrypt del PIN de 6 digitos; cambio obligatorio al primer ingreso (§4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("perfil_recolector")
+}
+
 model PuntoEncuentro {
   id        String   @id @default(uuid())
-  nombre    String // Ej: "Parque Bolognesi - Paucarpata"
-  distrito  String // Ej: "Paucarpata", "Cerro Colorado"
+  nombre    String
+  distrito  String
   direccion String
   latitud   Float
   longitud  Float
-  horario   String // Ej: "Martes y Jueves 08:00 - 11:00"
+  horario   String
   activo    Boolean  @default(true)
   createdAt DateTime @default(now())
 
-  pesajes Pesaje[]
+  entregas Entrega[]
 
   @@map("puntos_encuentro")
 }
 
-model Pesaje {
-  id               String         @id @default(uuid())
-  recolectorId     String
-  recolector       User           @relation("RecolectorPesajes", fields: [recolectorId], references: [id])
-  ciudadanoId      String
-  ciudadano        User           @relation("CiudadanoPesajes", fields: [ciudadanoId], references: [id])
-  puntoEncuentroId String
-  puntoEncuentro   PuntoEncuentro @relation(fields: [puntoEncuentroId], references: [id])
+// [S7] Entrega (antes Pesaje). Sync offline idempotente por item (spec §7).
+model Entrega {
+  id             String  @id @default(uuid())
+  // Clave de idempotencia del movil (UUID v4): @unique garantiza que un lote
+  // reenviado no duplique puntos; el duplicado responde DUPLICADA (spec §7).
+  idempotencyKey String  @unique
+  deviceId       String? // dispositivo que capturo (sync offline)
 
-  tipoResiduo     TipoResiduo
-  pesoKg          Float
-  puntosOtorgados Int
-  fechaRegistro   DateTime    @default(now())
+  usuarioId    String // dueno de la cuenta cuyo QR se escaneo (CIUDADANO o URBANIZACION)
+  usuario      User   @relation("UsuarioEntregas", fields: [usuarioId], references: [id], onDelete: Restrict)
+  recolectorId String
+  recolector   User   @relation("RecolectorEntregas", fields: [recolectorId], references: [id], onDelete: Restrict)
 
-  @@index([ciudadanoId])
-  @@index([recolectorId])
+  // [S7] Opcional: el punto de encuentro puede no aplicar en la sync offline.
+  puntoEncuentroId String?
+  puntoEncuentro   PuntoEncuentro? @relation(fields: [puntoEncuentroId], references: [id], onDelete: Restrict)
+
+  qrCode        String? // QR capturado al momento del pesaje (para detectar QR_INVALIDO)
+  fechaCaptura  DateTime // fecha del pesaje en el movil; rige factor y validaciones (§5/§7)
+  puntosTotales Int      @default(0) // suma de puntosSubtotal (backend siempre recalcula)
+
+  // [S7] Anulacion (spec §10): ANULADA + motivo; genera REVERSA_ENTREGA en el ledger.
+  estado          EstadoEntrega @default(VALIDA)
+  motivoAnulacion String?
+  anuladoPor      String? // userId del ADMIN (sin FK dura para no bloquear auditoria)
+
+  createdAt DateTime @default(now())
+
+  detalles    DetalleEntrega[]
+  movimientos MovimientoPuntos[]
+
+  // [S7/S13] Indices recomendados por la spec (usuario/recolector + fechaCaptura)
+  @@index([usuarioId, fechaCaptura])
+  @@index([recolectorId, fechaCaptura])
   @@index([puntoEncuentroId])
-  @@map("pesajes")
+  @@map("entregas")
+}
+
+// [S8] Detalle de pesaje por entrega (spec §5): peso Decimal(8,2), factor congelado
+// al de fechaCaptura y subtotal entero por linea. Maximo 20 detalles por entrega.
+model DetalleEntrega {
+  id        String  @id @default(uuid())
+  entregaId String
+  entrega   Entrega @relation(fields: [entregaId], references: [id], onDelete: Restrict)
+
+  tipoResiduo    TipoResiduo
+  pesoKg         Decimal     @db.Decimal(8, 2) // 0.1 a 50 kg por bolsa (spec §5)
+  factor         Decimal     @db.Decimal(8, 2) // factor vigente en fechaCaptura
+  puntosSubtotal Int // round(pesoKg * factor)
+
+  @@index([entregaId])
+  @@map("detalles_entrega")
+}
+
+// [S9] Factor versionado (spec §5): nunca se edita, se inserta una fila nueva.
+// El aplicable a una entrega es el vigente en su fechaCaptura.
+model ConfigFactorResiduo {
+  id           String      @id @default(uuid())
+  tipoResiduo  TipoResiduo
+  factor       Decimal     @db.Decimal(8, 2) // puntos por kg (RECICLABLE 10, ORGANICO 5)
+  vigenteDesde DateTime
+  creadoPorId  String
+  creadoPor    User        @relation("FactorCreadoPor", fields: [creadoPorId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+
+  @@index([tipoResiduo, vigenteDesde])
+  @@map("config_factor_residuo")
 }
 
 model EcoPuntosBalance {
   id               String   @id @default(uuid())
   userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  puntosActuales   Int      @default(0)
+  // [S14] Cascade -> Restrict: borrar un usuario no debe borrar su historial (spec §2.4).
+  user             User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  puntosActuales   Int      @default(0) // puede quedar negativo tras una reversa (spec §10)
   puntosHistoricos Int      @default(0)
   updatedAt        DateTime @updatedAt
 
   @@map("ecopuntos_balance")
 }
 
-model Beneficio {
-  id          String   @id @default(uuid())
-  titulo      String
-  descripcion String
-  puntosCosto Int
-  stock       Int      @default(100)
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
+// [S10] Ledger de puntos (spec §6): inmutable; cada cambio de balance va con un
+// movimiento en la misma $transaction. Invariante: puntosActuales = SUM(monto).
+model MovimientoPuntos {
+  id             String         @id @default(uuid())
+  usuarioId      String
+  usuario        User           @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  tipo           TipoMovimiento
+  monto          Int // positivo suma, negativo resta
+  saldoPosterior Int // saldo despues del movimiento
 
-  canjes Canje[]
+  entregaId String?
+  entrega   Entrega?      @relation(fields: [entregaId], references: [id], onDelete: Restrict)
+  voucherId String?
+  voucher   VoucherCanje? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
 
-  @@map("beneficios")
+  motivo    String? // obligatorio en REVERSA_* y AJUSTE
+  creadoPor String? // userId que origino el movimiento (sin FK dura)
+
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId, createdAt])
+  @@map("movimientos_puntos")
 }
 
-model Canje {
-  id           String      @id @default(uuid())
-  userId       String
-  user         User        @relation(fields: [userId], references: [id])
-  beneficioId  String
-  beneficio    Beneficio   @relation(fields: [beneficioId], references: [id])
-  puntosUsados Int
-  estado       EstadoCanje @default(PENDIENTE)
-  createdAt    DateTime    @default(now())
+// [S11] Oferta (antes Beneficio). Campos de vigencia/stock/direccion segun spec §8.
+model OfertaRecompensa {
+  id                  String    @id @default(uuid())
+  titulo              String
+  descripcion         String
+  costoPuntos         Int // antes puntosCosto
+  dirigidoA           Role // CIUDADANO o URBANIZACION: nadie canjea ofertas del otro rol (§8)
+  stockDisponible     Int? // null = ilimitado
+  fechaInicio         DateTime?
+  fechaFin            DateTime?
+  limitePorUsuario    Int? // null = sin limite
+  diasVigenciaVoucher Int       @default(90)
+  activo              Boolean   @default(true)
+  createdAt           DateTime  @default(now())
 
-  @@index([userId])
-  @@index([estado])
-  @@map("canjes")
+  vouchers VoucherCanje[]
+
+  @@map("ofertas_recompensa")
+}
+
+// [S12] Voucher (antes Canje). Transiciones EMITIDO -> APLICADO/VENCIDO/CANCELADO (§8).
+model VoucherCanje {
+  id        String           @id @default(uuid())
+  usuarioId String
+  usuario   User             @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  ofertaId  String
+  oferta    OfertaRecompensa @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
+
+  codigoVoucher String        @unique // codigo que consulta RENTAS/ADMIN (§14)
+  puntosUsados  Int
+  estado        EstadoVoucher @default(EMITIDO)
+
+  fechaVencimiento  DateTime // creadoAt + diasVigenciaVoucher
+  fechaAplicacion   DateTime?
+  aplicadoPor       String? // userId de RENTAS/ADMIN
+  motivoCancelacion String? // obligatorio al cancelar (devuelve puntos/stock)
+  canceladoPor      String?
+
+  // Solo urbanizaciones: seguimiento de obra tras APLICADO (§8)
+  estadoObra EstadoObra?
+
+  createdAt DateTime @default(now())
+
+  movimientos MovimientoPuntos[]
+
+  @@index([usuarioId, estado])
+  @@map("vouchers_canje")
+}
+
+// [S13] Auditoria (spec §12): registra acciones criticas sin FK dura en el detalle.
+model AuditLog {
+  id                String  @id @default(uuid())
+  usuarioId         String? // actor
+  actor             User?   @relation("AuditoriaActor", fields: [usuarioId], references: [id], onDelete: Restrict)
+  // Usuario afectado (cuando difiere del actor, ej. desactivar recolector)
+  usuarioAfectadoId String?
+  usuarioAfectado   User?   @relation("AuditoriaUsuario", fields: [usuarioAfectadoId], references: [id], onDelete: Restrict)
+
+  accion    String // ej. CREAR_ADMIN, DESACTIVAR_RECOLECTOR, ANULAR_ENTREGA, APLICAR_VOUCHER, REGENERAR_QR
+  entidad   String // nombre de la entidad afectada
+  entidadId String
+  detalle   Json? // contexto adicional (nunca passwordHash ni pinHash)
+
+  createdAt DateTime @default(now())
+
+  @@index([usuarioId, createdAt])
+  @@index([entidad, entidadId])
+  @@map("audit_log")
 }
