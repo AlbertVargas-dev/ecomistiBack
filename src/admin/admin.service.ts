@@ -15,7 +15,9 @@ import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
+import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
 import { RutaDto } from './dto/ruta.dto.js';
+import { VehiculoDto } from './dto/vehiculo.dto.js';
 import { Granularidad, TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { CreateRecolectorDto } from './dto/create-recolector.dto.js';
@@ -733,6 +735,121 @@ export class AdminService {
     });
     await this.audit(admin.id, 'MODIFICAR_RUTA', 'Ruta', id);
     return actualizada;
+  }
+
+  // --- Puntos de EcoReciclaje (admin)
+
+  async crearPunto(admin: AuthUser, dto: CreatePuntoDto) {
+    const punto = await this.prisma.puntoEncuentro.create({
+      data: {
+        nombre: dto.nombre,
+        distrito: dto.distrito,
+        direccion: dto.direccion,
+        latitud: dto.latitud,
+        longitud: dto.longitud,
+        horario: dto.horario,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(admin.id, 'CREAR_PUNTO', 'PuntoEncuentro', punto.id, {
+      nombre: dto.nombre,
+    });
+    return punto;
+  }
+
+  async actualizarPunto(admin: AuthUser, id: string, dto: CreatePuntoDto) {
+    const punto = await this.prisma.puntoEncuentro.findUnique({
+      where: { id },
+    });
+    if (!punto) throw new NotFoundException('Punto no encontrado');
+    const actualizado = await this.prisma.puntoEncuentro.update({
+      where: { id },
+      data: {
+        nombre: dto.nombre,
+        distrito: dto.distrito,
+        direccion: dto.direccion,
+        latitud: dto.latitud,
+        longitud: dto.longitud,
+        horario: dto.horario,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(admin.id, 'MODIFICAR_PUNTO', 'PuntoEncuentro', id);
+    return actualizado;
+  }
+
+  // --- Vehículos (admin)
+
+  async listarVehiculos() {
+    return this.prisma.vehiculo.findMany({
+      include: {
+        recolector: { select: { nombres: true, apellidos: true } },
+      },
+      orderBy: { placa: 'asc' },
+    });
+  }
+
+  async crearVehiculo(admin: AuthUser, dto: VehiculoDto) {
+    const vehiculo = await this.prisma.vehiculo.create({
+      data: {
+        placa: dto.placa,
+        tipo: dto.tipo,
+        capacidadKg: dto.capacidadKg,
+        recolectorId: dto.recolectorId,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(admin.id, 'CREAR_VEHICULO', 'Vehiculo', vehiculo.id, {
+      placa: dto.placa,
+    });
+    return vehiculo;
+  }
+
+  async actualizarVehiculo(admin: AuthUser, id: string, dto: VehiculoDto) {
+    const vehiculo = await this.prisma.vehiculo.findUnique({ where: { id } });
+    if (!vehiculo) throw new NotFoundException('Vehículo no encontrado');
+    const actualizado = await this.prisma.vehiculo.update({
+      where: { id },
+      data: {
+        placa: dto.placa,
+        tipo: dto.tipo,
+        capacidadKg: dto.capacidadKg,
+        recolectorId: dto.recolectorId,
+        activo: dto.activo ?? true,
+      },
+    });
+    await this.audit(admin.id, 'MODIFICAR_VEHICULO', 'Vehiculo', id);
+    return actualizado;
+  }
+
+  // --- Personal (diseño): recolectores con última actividad
+
+  async listarRecolectores() {
+    const recolectores = await this.prisma.user.findMany({
+      where: { rol: Role.RECOLECTOR },
+      include: {
+        perfilRecolector: true,
+        _count: { select: { entregasRegistradas: true } },
+      },
+      orderBy: { nombres: 'asc' },
+    });
+
+    return Promise.all(
+      recolectores.map(async (r) => {
+        const ultima = await this.prisma.entrega.findFirst({
+          where: { recolectorId: r.id, estado: 'VALIDA' },
+          orderBy: { fechaCaptura: 'desc' },
+          select: { fechaCaptura: true },
+        });
+        const { passwordHash: _ph, ...rest } = r;
+        return {
+          ...rest,
+          zonaCamion: r.perfilRecolector?.zonaCamion ?? null,
+          totalEntregas: r._count.entregasRegistradas,
+          ultimaEntrega: ultima?.fechaCaptura ?? null,
+        };
+      }),
+    );
   }
 
   async dashboardClientes(q: PaginacionDto = {}) {
