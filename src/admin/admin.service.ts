@@ -14,6 +14,7 @@ import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
+import { EntregasQueryDto } from './dto/entregas-query.dto.js';
 import { Granularidad, TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { CreateRecolectorDto } from './dto/create-recolector.dto.js';
@@ -581,6 +582,112 @@ export class AdminService {
     }
 
     return { granularidad, serie };
+  }
+
+  /**
+   * Mapa de calor (diseño): kg por punto de encuentro con nivel
+   * alta/media/baja según terciles del máximo (para pins del mapa).
+   */
+  async mapaCalor() {
+    const entregas = await this.prisma.entrega.findMany({
+      where: { puntoEncuentroId: { not: null } },
+      include: {
+        puntoEncuentro: true,
+        detalles: { select: { pesoKg: true } },
+      },
+    });
+
+    const porPunto = new Map<
+      string,
+      {
+        puntoId: string;
+        nombre: string;
+        distrito: string;
+        latitud: number;
+        longitud: number;
+        totalKg: number;
+        totalEntregas: number;
+      }
+    >();
+
+    for (const e of entregas) {
+      const punto = e.puntoEncuentro;
+      if (!punto) continue;
+      const actual = porPunto.get(punto.id) ?? {
+        puntoId: punto.id,
+        nombre: punto.nombre,
+        distrito: punto.distrito,
+        latitud: punto.latitud,
+        longitud: punto.longitud,
+        totalKg: 0,
+        totalEntregas: 0,
+      };
+      actual.totalKg += e.detalles.reduce((s, d) => s + Number(d.pesoKg), 0);
+      actual.totalEntregas += 1;
+      porPunto.set(punto.id, actual);
+    }
+
+    const puntos = [...porPunto.values()].sort((a, b) => b.totalKg - a.totalKg);
+    const max = puntos[0]?.totalKg ?? 0;
+
+    return puntos.map((p) => ({
+      ...p,
+      nivel:
+        max > 0 && p.totalKg >= max * 0.66
+          ? 'ALTA'
+          : max > 0 && p.totalKg >= max * 0.33
+            ? 'MEDIA'
+            : 'BAJA',
+    }));
+  }
+
+  /**
+   * Tabla "Recolecciones Recientes" (diseño): entregas con filtros y
+   * paginación, incluyendo usuario, recolector y punto.
+   */
+  async listarEntregas(q: EntregasQueryDto = {}) {
+    const search = q.search?.trim();
+    return this.prisma.entrega.findMany({
+      where: {
+        estado: q.estado,
+        fechaCaptura: {
+          gte: q.desde ? new Date(q.desde) : undefined,
+          lte: q.hasta ? new Date(q.hasta) : undefined,
+        },
+        detalles: q.tipoResiduo
+          ? { some: { tipoResiduo: q.tipoResiduo } }
+          : undefined,
+        OR: search
+          ? [
+              { id: { contains: search } },
+              {
+                usuario: {
+                  OR: [
+                    { nombres: { contains: search, mode: 'insensitive' } },
+                    { apellidos: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+              {
+                recolector: {
+                  OR: [
+                    { nombres: { contains: search, mode: 'insensitive' } },
+                    { apellidos: { contains: search, mode: 'insensitive' } },
+                  ],
+                },
+              },
+            ]
+          : undefined,
+      },
+      include: {
+        usuario: { select: { nombres: true, apellidos: true } },
+        recolector: { select: { nombres: true, apellidos: true } },
+        puntoEncuentro: { select: { nombre: true, distrito: true } },
+        detalles: true,
+      },
+      orderBy: { fechaCaptura: 'desc' },
+      ...paginacion(q),
+    });
   }
 
   async dashboardClientes(q: PaginacionDto = {}) {
