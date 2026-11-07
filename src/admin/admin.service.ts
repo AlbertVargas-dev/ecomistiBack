@@ -14,6 +14,7 @@ import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
+import { Granularidad, TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { CreateRecolectorDto } from './dto/create-recolector.dto.js';
 import { CreateStaffDto } from './dto/create-staff.dto.js';
@@ -488,6 +489,98 @@ export class AdminService {
       vouchersPorEstado: vouchers,
       ofertasActivas: ofertas,
     };
+  }
+
+  /**
+   * Tendencia de recolección (gráfico del Panel General): serie por
+   * día/semana/mes con kg reciclables y orgánicos. Huecos en cero.
+   */
+  async tendencia(q: TendenciaQueryDto = {}) {
+    const hasta = q.hasta ? new Date(q.hasta) : new Date();
+    const desde = q.desde
+      ? new Date(q.desde)
+      : new Date(hasta.getTime() - 6 * 24 * 60 * 60 * 1000);
+    if (desde > hasta) {
+      throw new BadRequestException(
+        'La fecha desde no puede ser posterior a hasta',
+      );
+    }
+    const granularidad = q.granularidad ?? Granularidad.DIA;
+
+    const detalles = await this.prisma.detalleEntrega.findMany({
+      where: { entrega: { fechaCaptura: { gte: desde, lte: hasta } } },
+      select: {
+        tipoResiduo: true,
+        pesoKg: true,
+        entrega: { select: { fechaCaptura: true } },
+      },
+    });
+
+    const buckets = new Map<
+      string,
+      { fecha: string; kgReciclables: number; kgOrganicos: number }
+    >();
+
+    // Buckets en UTC (las fechas se guardan en UTC, spec §13).
+    const clave = (d: Date): string => {
+      const fecha = new Date(d);
+      if (granularidad === Granularidad.MES) {
+        fecha.setUTCDate(1);
+      } else if (granularidad === Granularidad.SEMANA) {
+        const dia = (fecha.getUTCDay() + 6) % 7; // lunes = 0
+        fecha.setUTCDate(fecha.getUTCDate() - dia);
+      }
+      fecha.setUTCHours(0, 0, 0, 0);
+      return fecha.toISOString().slice(0, 10);
+    };
+
+    for (const detalle of detalles) {
+      const k = clave(detalle.entrega.fechaCaptura);
+      const bucket = buckets.get(k) ?? {
+        fecha: k,
+        kgReciclables: 0,
+        kgOrganicos: 0,
+      };
+      if (detalle.tipoResiduo === 'RECICLABLE') {
+        bucket.kgReciclables += Number(detalle.pesoKg);
+      } else {
+        bucket.kgOrganicos += Number(detalle.pesoKg);
+      }
+      buckets.set(k, bucket);
+    }
+
+    // Completar huecos con ceros entre desde y hasta.
+    const serie: {
+      fecha: string;
+      kgReciclables: number;
+      kgOrganicos: number;
+      totalKg: number;
+    }[] = [];
+    const cursor = new Date(desde);
+    cursor.setUTCHours(0, 0, 0, 0);
+    const fin = new Date(hasta);
+    fin.setUTCHours(0, 0, 0, 0);
+    while (cursor <= fin) {
+      const k = clave(cursor);
+      const b = buckets.get(k) ?? {
+        fecha: k,
+        kgReciclables: 0,
+        kgOrganicos: 0,
+      };
+      serie.push({
+        ...b,
+        totalKg: b.kgReciclables + b.kgOrganicos,
+      });
+      if (granularidad === Granularidad.MES) {
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1, 1);
+      } else if (granularidad === Granularidad.SEMANA) {
+        cursor.setUTCDate(cursor.getUTCDate() + 7);
+      } else {
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+
+    return { granularidad, serie };
   }
 
   async dashboardClientes(q: PaginacionDto = {}) {
