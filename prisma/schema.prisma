@@ -122,7 +122,7 @@ model PuntoEncuentro {
 
 model Entrega {
   id             String  @id @default(uuid())
-  idempotencyKey String  @unique // idempotencia sync offline (spec §7)
+  idempotencyKey String  @unique
   deviceId       String?
 
   usuarioId    String // dueno de la cuenta cuyo QR se escaneo (CIUDADANO o URBANIZACION)
@@ -134,7 +134,7 @@ model Entrega {
   puntoEncuentro   PuntoEncuentro? @relation(fields: [puntoEncuentroId], references: [id], onDelete: Restrict)
 
   qrCode        String? // QR capturado al momento del pesaje (para detectar QR_INVALIDO)
-  fechaCaptura  DateTime // fecha del pesaje en el movil; rige factor y validaciones (§5/§7)
+  fechaCaptura  DateTime // fecha del pesaje en el movil; rige factor y validaciones
   puntosTotales Int      @default(0) // suma de puntosSubtotal (backend siempre recalcula)
 
   estado          EstadoEntrega @default(VALIDA)
@@ -208,7 +208,7 @@ model MovimientoPuntos {
   voucher   VoucherCanje? @relation(fields: [voucherId], references: [id], onDelete: Restrict)
 
   motivo    String? // obligatorio en REVERSA_* y AJUSTE
-  creadoPor String? // userId que origino el movimiento (sin FK dura)
+  creadoPor String? // userId que origino el movimiento
 
   createdAt DateTime @default(now())
 
@@ -221,7 +221,7 @@ model OfertaRecompensa {
   titulo              String
   descripcion         String
   costoPuntos         Int // antes puntosCosto
-  dirigidoA           Role // CIUDADANO o URBANIZACION: nadie canjea ofertas del otro rol (§8)
+  dirigidoA           Role // CIUDADANO o URBANIZACION: nadie canjea ofertas del otro rol
   stockDisponible     Int? // null = ilimitado
   fechaInicio         DateTime?
   fechaFin            DateTime?
@@ -242,11 +242,11 @@ model VoucherCanje {
   ofertaId  String
   oferta    OfertaRecompensa @relation(fields: [ofertaId], references: [id], onDelete: Restrict)
 
-  codigoVoucher String        @unique // codigo que consulta RENTAS/ADMIN (§14)
+  codigoVoucher String        @unique // codigo que consulta RENTAS/ADMIN
   puntosUsados  Int
   estado        EstadoVoucher @default(EMITIDO)
 
-  fechaVencimiento  DateTime // creadoAt + diasVigenciaVoucher
+  fechaVencimiento  DateTime
   fechaAplicacion   DateTime?
   aplicadoPor       String?
   motivoCancelacion String?
