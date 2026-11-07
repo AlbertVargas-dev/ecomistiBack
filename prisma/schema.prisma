@@ -53,6 +53,12 @@ enum EstadoRuta {
   SUSPENDIDA
 }
 
+enum EstadoIncidencia {
+  ABIERTA
+  EN_REVISION
+  RESUELTA
+}
+
 model User {
   id           String  @id @default(uuid())
   email        String  @unique
@@ -88,6 +94,7 @@ model User {
   factoresComunidades ConfigFactorResiduo[] @relation("FactorCreadoPor")
   rutasAsignadas      Ruta[]
   vehiculos           Vehiculo[]
+  incidencias         Incidencia[]
 
   puntosBalance EcoPuntosBalance?
 
@@ -189,6 +196,23 @@ model Vehiculo {
   createdAt    DateTime @default(now())
 
   @@map("vehiculos")
+}
+
+model Incidencia {
+  id          String           @id @default(uuid())
+  usuarioId   String
+  usuario     User             @relation(fields: [usuarioId], references: [id], onDelete: Restrict)
+  tipo        String // ej. "Punto saturado", "Basura en via publica"
+  descripcion String
+  fotoUrl     String?
+  latitud     Float?
+  longitud    Float?
+  estado      EstadoIncidencia @default(ABIERTA)
+  createdAt   DateTime         @default(now())
+
+  @@index([usuarioId, createdAt])
+  @@index([estado])
+  @@map("incidencias")
 }
 
 // Detalles de pesaje: factor congelado en fechaCaptura, max. 20 por entrega.

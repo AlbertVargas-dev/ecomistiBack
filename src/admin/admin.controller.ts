@@ -21,6 +21,7 @@ import { AnularEntregaDto } from './dto/anular-entrega.dto.js';
 import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
+import { EstadoIncidenciaDto } from './dto/estado-incidencia.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
 import { EntregasQueryDto } from './dto/entregas-query.dto.js';
@@ -251,6 +252,22 @@ export class AdminController {
   })
   listarRecolectores() {
     return this.adminService.listarRecolectores();
+  }
+
+  @Get('incidencias')
+  @ApiOperation({ summary: 'Listar incidencias reportadas (paginado)' })
+  listarIncidencias(@Query() q: PaginacionDto) {
+    return this.adminService.listarIncidencias(q);
+  }
+
+  @Patch('incidencias/:id/estado')
+  @ApiOperation({ summary: 'Cambiar estado de una incidencia' })
+  cambiarEstadoIncidencia(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: EstadoIncidenciaDto,
+  ) {
+    return this.adminService.cambiarEstadoIncidencia(admin, id, dto.estado);
   }
 
   @Get('dashboard/clientes')
