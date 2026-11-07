@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
+import { Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -41,6 +41,21 @@ export class UsuariosController {
   })
   getPanel(@CurrentUser() user: AuthUser) {
     return this.usuariosService.getPanel(user);
+  }
+
+  @Get('me/notificaciones')
+  @ApiOperation({ summary: 'Mis notificaciones (hitos de recompensa)' })
+  getNotificaciones(@CurrentUser() user: AuthUser) {
+    return this.usuariosService.getNotificaciones(user);
+  }
+
+  @Patch('me/notificaciones/:id/leida')
+  @ApiOperation({ summary: 'Marcar notificación como leída' })
+  marcarNotificacionLeida(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.usuariosService.marcarNotificacionLeida(user, id);
   }
 
   @Get('me/movimientos')

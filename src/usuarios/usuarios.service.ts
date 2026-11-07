@@ -101,6 +101,29 @@ export class UsuariosService {
     };
   }
 
+  async getNotificaciones(user: AuthUser) {
+    this.assertActive(user);
+    return this.prisma.notificacion.findMany({
+      where: { usuarioId: user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+  }
+
+  async marcarNotificacionLeida(user: AuthUser, id: string) {
+    this.assertActive(user);
+    const notificacion = await this.prisma.notificacion.findUnique({
+      where: { id },
+    });
+    if (!notificacion || notificacion.usuarioId !== user.id) {
+      throw new NotFoundException('Notificación no encontrada');
+    }
+    return this.prisma.notificacion.update({
+      where: { id },
+      data: { leida: true },
+    });
+  }
+
   private assertActive(user: AuthUser & { activo?: boolean }) {
     if (user.activo === false) {
       throw new UnauthorizedException('Cuenta desactivada');
