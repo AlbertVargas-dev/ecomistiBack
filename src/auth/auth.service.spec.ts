@@ -13,6 +13,10 @@ describe('AuthService', () => {
     user: {
       findUnique: ReturnType<typeof vi.fn>;
       create: ReturnType<typeof vi.fn>;
+      update: ReturnType<typeof vi.fn>;
+    };
+    perfilRecolector: {
+      findUnique: ReturnType<typeof vi.fn>;
     };
   };
   let jwtService: {
@@ -24,6 +28,10 @@ describe('AuthService', () => {
       user: {
         findUnique: vi.fn(),
         create: vi.fn(),
+        update: vi.fn(),
+      },
+      perfilRecolector: {
+        findUnique: vi.fn(),
       },
     };
 
@@ -54,6 +62,7 @@ describe('AuthService', () => {
       apellidos: 'Perez',
       dni: '12345678',
       telefono: '987654321',
+      aceptoTerminos: true,
       rol: Role.CIUDADANO,
     };
 
@@ -83,11 +92,15 @@ describe('AuthService', () => {
 
       expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
       expect(prisma.user.create).toHaveBeenCalled();
-      expect(jwtService.signAsync).toHaveBeenCalledWith({
-        sub: 'user-uuid-1',
-        email: registerDto.email,
-        rol: registerDto.rol,
-      });
+      expect(jwtService.signAsync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sub: 'user-uuid-1',
+          email: registerDto.email,
+          rol: registerDto.rol,
+          type: 'access',
+        }),
+        expect.objectContaining({ expiresIn: '15m' }),
+      );
       expect(result.accessToken).toBe('test-jwt-token');
       expect(result.user).not.toHaveProperty('passwordHash');
       expect(result.user.email).toBe(registerDto.email);
@@ -155,11 +168,87 @@ describe('AuthService', () => {
         id: 'user-uuid-1',
         email: loginDto.email,
         passwordHash,
+        intentosFallidos: 0,
       });
 
       await expect(service.login(loginDto)).rejects.toThrow(
         UnauthorizedException,
       );
+      // Registra el intento fallido (bloqueo tras 5).
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-uuid-1' },
+        data: expect.objectContaining({ intentosFallidos: 1 }),
+      });
+    });
+
+    it('debe bloquear la cuenta tras 5 intentos fallidos', async () => {
+      const passwordHash = await bcrypt.hash('otraPassword', 10);
+      prisma.user.findUnique.mockResolvedValue({
+        id: 'user-uuid-1',
+        email: loginDto.email,
+        passwordHash,
+        intentosFallidos: 4,
+      });
+
+      await expect(service.login(loginDto)).rejects.toThrow(
+        UnauthorizedException,
+      );
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-uuid-1' },
+        data: expect.objectContaining({
+          intentosFallidos: 5,
+          bloqueadoHasta: expect.any(Date),
+        }),
+      });
+    });
+  });
+
+  describe('login recolector (DNI + PIN)', () => {
+    it('debe iniciar sesión con PIN válido', async () => {
+      const pinHash = await bcrypt.hash('123456', 10);
+      prisma.perfilRecolector.findUnique.mockResolvedValue({
+        id: 'perfil-1',
+        dni: '12345678',
+        pinHash,
+        usuario: {
+          id: 'user-uuid-2',
+          email: 'recolector@test.com',
+          passwordHash: 'x',
+          nombres: 'Reco',
+          apellidos: 'Lector',
+          dni: '12345678',
+          rol: Role.RECOLECTOR,
+          activo: true,
+          intentosFallidos: 0,
+          puntosBalance: { puntosActuales: 0, puntosHistoricos: 0 },
+        },
+      });
+
+      const result = await service.login({ dni: '12345678', pin: '123456' });
+
+      expect(result.accessToken).toBe('test-jwt-token');
+      expect(result.user.rol).toBe(Role.RECOLECTOR);
+    });
+
+    it('debe rechazar PIN incorrecto', async () => {
+      const pinHash = await bcrypt.hash('000000', 10);
+      prisma.perfilRecolector.findUnique.mockResolvedValue({
+        id: 'perfil-1',
+        dni: '12345678',
+        pinHash,
+        usuario: {
+          id: 'user-uuid-2',
+          email: 'recolector@test.com',
+          passwordHash: 'x',
+          rol: Role.RECOLECTOR,
+          activo: true,
+          intentosFallidos: 0,
+        },
+      });
+
+      await expect(
+        service.login({ dni: '12345678', pin: '123456' }),
+      ).rejects.toThrow(UnauthorizedException);
     });
   });
 });

@@ -5,6 +5,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { JwtStrategy } from './strategies/jwt.strategy.js';
+import { ACCESS_TOKEN_TTL } from '../config/security.config.js';
 
 @Module({
   imports: [
@@ -12,14 +13,17 @@ import { JwtStrategy } from './strategies/jwt.strategy.js';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (configService: ConfigService) => ({
-        secret:
-          configService.get<string>('JWT_SECRET') ??
-          'cambia-esto-por-un-secreto-largo',
-        signOptions: {
-          expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '1d') as any,
-        },
-      }),
+      useFactory: (configService: ConfigService) => {
+        const secret = configService.get<string>('JWT_SECRET');
+        // Spec §4: sin fallback inseguro — el secreto es obligatorio por entorno.
+        if (!secret) {
+          throw new Error('JWT_SECRET no está definido en el entorno');
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: ACCESS_TOKEN_TTL },
+        };
+      },
     }),
   ],
   controllers: [AuthController],
