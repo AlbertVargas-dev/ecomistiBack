@@ -7,6 +7,7 @@ import {
 import { randomInt, randomUUID } from 'node:crypto';
 import { Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { CacheService } from '../common/cache/cache.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { SALT_ROUNDS } from '../config/security.config.js';
 import { AnularEntregaDto } from './dto/anular-entrega.dto.js';
@@ -29,7 +30,10 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cache: CacheService,
+  ) {}
 
   /**
    * Alta de recolector (spec §4): el admin genera/recibe el PIN inicial
@@ -408,6 +412,14 @@ export class AdminService {
    * Sin fechas: últimos 7 días.
    */
   async dashboardResumen(q: ResumenQueryDto = {}) {
+    const claveCache = `resumen:${q.desde ?? ''}:${q.hasta ?? ''}:${q.distrito ?? ''}`;
+    const enCache = this.cache.get<Record<string, unknown>>(claveCache) as Awaited<ReturnType<AdminService['calcularResumen']>> | null;
+    if (enCache) return enCache;
+    const resultado = await this.calcularResumen(q);
+    return this.cache.set(claveCache, resultado);
+  }
+
+  private async calcularResumen(q: ResumenQueryDto = {}) {
     const hasta = q.hasta ? new Date(q.hasta) : new Date();
     const desde = q.desde
       ? new Date(q.desde)
@@ -506,6 +518,14 @@ export class AdminService {
    * día/semana/mes con kg reciclables y orgánicos. Huecos en cero.
    */
   async tendencia(q: TendenciaQueryDto = {}) {
+    const claveCache = `tendencia:${q.desde ?? ''}:${q.hasta ?? ''}:${q.granularidad ?? 'dia'}`;
+    const enCache = this.cache.get<Record<string, unknown>>(claveCache) as Awaited<ReturnType<AdminService['calcularTendencia']>> | null;
+    if (enCache) return enCache;
+    const resultado = await this.calcularTendencia(q);
+    return this.cache.set(claveCache, resultado);
+  }
+
+  private async calcularTendencia(q: TendenciaQueryDto = {}) {
     const hasta = q.hasta ? new Date(q.hasta) : new Date();
     const desde = q.desde
       ? new Date(q.desde)
@@ -598,6 +618,13 @@ export class AdminService {
    * alta/media/baja según terciles del máximo (para pins del mapa).
    */
   async mapaCalor() {
+    const enCache = this.cache.get<Record<string, unknown>>('mapa-calor') as Awaited<ReturnType<AdminService['calcularMapaCalor']>> | null;
+    if (enCache) return enCache;
+    const resultado = await this.calcularMapaCalor();
+    return this.cache.set('mapa-calor', resultado, 60_000);
+  }
+
+  private async calcularMapaCalor() {
     const entregas = await this.prisma.entrega.findMany({
       where: { puntoEncuentroId: { not: null } },
       include: {
