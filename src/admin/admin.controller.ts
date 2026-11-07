@@ -23,6 +23,7 @@ import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
 import { ResumenQueryDto } from './dto/resumen-query.dto.js';
+import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -155,6 +156,14 @@ export class AdminController {
   })
   dashboardResumen(@Query() q: ResumenQueryDto) {
     return this.adminService.dashboardResumen(q);
+  }
+
+  @Get('estadisticas/tendencia')
+  @ApiOperation({
+    summary: 'Serie temporal de recolección (gráfico del Panel General)',
+  })
+  tendencia(@Query() q: TendenciaQueryDto) {
+    return this.adminService.tendencia(q);
   }
 
   @Get('dashboard/clientes')
