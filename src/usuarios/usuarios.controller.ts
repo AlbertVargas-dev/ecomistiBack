@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -9,6 +9,8 @@ import { Role } from '@prisma/client';
 import { UsuariosService } from './usuarios.service.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto.js';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto.js';
 import { PaginacionDto } from '../common/dto/paginacion.dto.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 
@@ -41,6 +43,26 @@ export class UsuariosController {
   })
   getPanel(@CurrentUser() user: AuthUser) {
     return this.usuariosService.getPanel(user);
+  }
+
+  @Patch('me')
+  @ApiOperation({
+    summary: 'Actualizar mis datos (nombres, apellidos, teléfono)',
+  })
+  actualizarPerfil(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ActualizarPerfilDto,
+  ) {
+    return this.usuariosService.actualizarPerfil(user, dto);
+  }
+
+  @Patch('me/cambiar-password')
+  @ApiOperation({ summary: 'Cambiar mi contraseña (verifica la actual)' })
+  cambiarPassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CambiarPasswordDto,
+  ) {
+    return this.usuariosService.cambiarPassword(user, dto);
   }
 
   @Get('me/notificaciones')
