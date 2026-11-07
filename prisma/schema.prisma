@@ -100,6 +100,9 @@ model User {
   urbanizacionId String?
   urbanizacion   Urbanizacion? @relation(fields: [urbanizacionId], references: [id], onDelete: Restrict)
 
+  cooperativaId String?
+  cooperativa   Cooperativa? @relation(fields: [cooperativaId], references: [id], onDelete: Restrict)
+
   puntosBalance EcoPuntosBalance?
 
   @@map("users")
@@ -259,6 +262,8 @@ model Cooperativa {
   telefono  String?
   activo    Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  miembros User[]
 
   @@map("cooperativas")
 }
