@@ -61,6 +61,33 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(dto.password, SALT_ROUNDS);
 
+    // URBANIZACION: el representante legal debe indicar a qué urbanización
+    // pertenece (existente por id, o nueva por nombre).
+    let urbanizacionId: string | undefined;
+    if (rol === Role.URBANIZACION) {
+      if (dto.urbanizacionId) {
+        const existe = await this.prisma.urbanizacion.findUnique({
+          where: { id: dto.urbanizacionId },
+        });
+        if (!existe) {
+          throw new BadRequestException('La urbanización no existe');
+        }
+        urbanizacionId = existe.id;
+      } else if (dto.nombreUrbanizacion) {
+        const nueva = await this.prisma.urbanizacion.create({
+          data: {
+            nombre: dto.nombreUrbanizacion,
+            direccion: dto.direccionUrbanizacion,
+          },
+        });
+        urbanizacionId = nueva.id;
+      } else {
+        throw new BadRequestException(
+          'Debe indicar la urbanización (existente o nueva)',
+        );
+      }
+    }
+
     const user = await this.prisma.user.create({
       data: {
         email,
@@ -70,6 +97,7 @@ export class AuthService {
         dni: dto.dni,
         telefono: dto.telefono,
         rol,
+        urbanizacionId,
         aceptoTerminosAt: dto.aceptoTerminos ? new Date() : null,
         puntosBalance: {
           create: { puntosActuales: 0, puntosHistoricos: 0 },

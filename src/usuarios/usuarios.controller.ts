@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -9,6 +17,8 @@ import { Role } from '@prisma/client';
 import { UsuariosService } from './usuarios.service.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
+import { ActualizarPerfilDto } from './dto/actualizar-perfil.dto.js';
+import { CambiarPasswordDto } from './dto/cambiar-password.dto.js';
 import { PaginacionDto } from '../common/dto/paginacion.dto.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 
@@ -41,6 +51,55 @@ export class UsuariosController {
   })
   getPanel(@CurrentUser() user: AuthUser) {
     return this.usuariosService.getPanel(user);
+  }
+
+  @Patch('me')
+  @Roles(
+    Role.ADMIN,
+    Role.RECOLECTOR,
+    Role.CIUDADANO,
+    Role.URBANIZACION,
+    Role.RENTAS,
+  )
+  @ApiOperation({
+    summary: 'Actualizar mis datos (nombres, apellidos, teléfono)',
+  })
+  actualizarPerfil(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: ActualizarPerfilDto,
+  ) {
+    return this.usuariosService.actualizarPerfil(user, dto);
+  }
+
+  @Patch('me/cambiar-password')
+  @Roles(
+    Role.ADMIN,
+    Role.RECOLECTOR,
+    Role.CIUDADANO,
+    Role.URBANIZACION,
+    Role.RENTAS,
+  )
+  @ApiOperation({ summary: 'Cambiar mi contraseña (verifica la actual)' })
+  cambiarPassword(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: CambiarPasswordDto,
+  ) {
+    return this.usuariosService.cambiarPassword(user, dto);
+  }
+
+  @Get('me/notificaciones')
+  @ApiOperation({ summary: 'Mis notificaciones (hitos de recompensa)' })
+  getNotificaciones(@CurrentUser() user: AuthUser) {
+    return this.usuariosService.getNotificaciones(user);
+  }
+
+  @Patch('me/notificaciones/:id/leida')
+  @ApiOperation({ summary: 'Marcar notificación como leída' })
+  marcarNotificacionLeida(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+  ) {
+    return this.usuariosService.marcarNotificacionLeida(user, id);
   }
 
   @Get('me/movimientos')

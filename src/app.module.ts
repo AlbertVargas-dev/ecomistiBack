@@ -15,6 +15,8 @@ import { AdminModule } from './admin/admin.module.js';
 import { OfertasModule } from './ofertas/ofertas.module.js';
 import { VouchersModule } from './vouchers/vouchers.module.js';
 import { RentasModule } from './rentas/rentas.module.js';
+import { IncidenciasModule } from './incidencias/incidencias.module.js';
+import { UrbanizacionesModule } from './urbanizaciones/urbanizaciones.module.js';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
@@ -37,6 +39,8 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.
     OfertasModule,
     VouchersModule,
     RentasModule,
+    IncidenciasModule,
+    UrbanizacionesModule,
     // Rate limiting (spec §4): 100 req/min general, 10 req/min en login/registro.
     ThrottlerModule.forRoot([
       {

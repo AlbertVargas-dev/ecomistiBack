@@ -28,6 +28,13 @@ export class CreateRecolectorDto {
   zonaCamion?: string;
 
   @ApiPropertyOptional({
+    description: 'Cooperativa a la que pertenece (opcional)',
+  })
+  @IsOptional()
+  @IsString()
+  cooperativaId?: string;
+
+  @ApiPropertyOptional({
     example: '123456',
     description:
       'PIN inicial de 6 dígitos. Si se omite, el servidor genera uno y lo devuelve una sola vez.',

@@ -1,4 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Post,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -7,6 +14,7 @@ import {
 } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { RecoleccionService } from './recoleccion.service.js';
+import { IdentificarDniDto } from './dto/identificar-dni.dto.js';
 import { IdentificarQrDto } from './dto/identificar-qr.dto.js';
 import { SincronizarDto } from './dto/sincronizar.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -21,6 +29,12 @@ import type { AuthUser } from '../common/decorators/current-user.decorator.js';
 export class RecoleccionController {
   constructor(private readonly recoleccionService: RecoleccionService) {}
 
+  @Get('mis-entregas')
+  @ApiOperation({ summary: 'Entregas registradas por este recolector' })
+  misEntregas(@CurrentUser() user: AuthUser) {
+    return this.recoleccionService.misEntregas(user.id);
+  }
+
   @Post('identificar-qr')
   @ApiOperation({
     summary: 'Identificar un QR (nombre parcial + tipo de cuenta)',
@@ -29,6 +43,17 @@ export class RecoleccionController {
   @ApiResponse({ status: 404, description: 'QR no encontrado.' })
   identificarQr(@Body() dto: IdentificarQrDto) {
     return this.recoleccionService.identificarQr(dto);
+  }
+
+  @Post('identificar-dni')
+  @ApiOperation({ summary: 'Identificar por DNI (alternativa al escaneo)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Nombre parcial, tipo de cuenta y qrCode.',
+  })
+  @ApiResponse({ status: 404, description: 'DNI no encontrado.' })
+  identificarDni(@Body() dto: IdentificarDniDto) {
+    return this.recoleccionService.identificarDni(dto.dni);
   }
 
   @Post('sincronizar-entrega')
