@@ -6,7 +6,9 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -21,7 +23,16 @@ import { AnularEntregaDto } from './dto/anular-entrega.dto.js';
 import { CancelarVoucherDto } from './dto/cancelar-voucher.dto.js';
 import { CreateFactorDto } from './dto/create-factor.dto.js';
 import { CreateOfertaDto } from './dto/create-oferta.dto.js';
+import { EstadoIncidenciaDto } from './dto/estado-incidencia.dto.js';
 import { EstadoObraDto } from './dto/estado-obra.dto.js';
+import { ResumenQueryDto } from './dto/resumen-query.dto.js';
+import { EntregasQueryDto } from './dto/entregas-query.dto.js';
+import { CreatePuntoDto } from '../puntos-encuentro/dto/create-punto.dto.js';
+import { RutaDto } from './dto/ruta.dto.js';
+import { VehiculoDto } from './dto/vehiculo.dto.js';
+import { TendenciaQueryDto } from './dto/tendencia-query.dto.js';
+import { AsignarCooperativaDto } from './dto/asignar-cooperativa.dto.js';
+import { CooperativaDto } from './dto/cooperativa.dto.js';
 import { EstadoRecolectorDto } from './dto/estado-recolector.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -85,6 +96,12 @@ export class AdminController {
     return this.adminService.crearStaff(admin, dto, Role.RENTAS);
   }
 
+  @Get('ofertas')
+  @ApiOperation({ summary: 'Listar todas las ofertas (admin)' })
+  listarOfertas(@Query() q: PaginacionDto) {
+    return this.adminService.listarOfertas(q);
+  }
+
   @Post('ofertas')
   @ApiOperation({ summary: 'Publicar oferta' })
   crearOferta(@CurrentUser() admin: AuthUser, @Body() dto: CreateOfertaDto) {
@@ -136,9 +153,11 @@ export class AdminController {
   }
 
   @Get('reportes/residuos')
-  @ApiOperation({ summary: 'Reporte: kg/puntos por tipo y top recolectores' })
-  reporteResiduos() {
-    return this.adminService.reporteResiduos();
+  @ApiOperation({
+    summary: 'Reporte: kg/puntos por tipo y top recolectores (con filtros)',
+  })
+  reporteResiduos(@Query() q: ResumenQueryDto) {
+    return this.adminService.reporteResiduos(q);
   }
 
   @Get('auditoria')
@@ -152,8 +171,187 @@ export class AdminController {
     summary:
       'Resumen: clientes, kg totales, puntos emitidos, vouchers y ofertas',
   })
-  dashboardResumen() {
-    return this.adminService.dashboardResumen();
+  dashboardResumen(@Query() q: ResumenQueryDto) {
+    return this.adminService.dashboardResumen(q);
+  }
+
+  @Get('estadisticas/tendencia')
+  @ApiOperation({
+    summary: 'Serie temporal de recolección (gráfico del Panel General)',
+  })
+  tendencia(@Query() q: TendenciaQueryDto) {
+    return this.adminService.tendencia(q);
+  }
+
+  @Get('estadisticas/mapa-calor')
+  @ApiOperation({
+    summary:
+      'Kg por punto de encuentro con nivel alta/media/baja (pins del mapa)',
+  })
+  mapaCalor() {
+    return this.adminService.mapaCalor();
+  }
+
+  @Get('entregas')
+  @ApiOperation({ summary: 'Tabla de entregas con filtros y paginación' })
+  listarEntregas(@Query() q: EntregasQueryDto) {
+    return this.adminService.listarEntregas(q);
+  }
+
+  @Get('rutas')
+  @ApiOperation({ summary: 'Listar rutas con recolector y conteo de entregas' })
+  listarRutas() {
+    return this.adminService.listarRutas();
+  }
+
+  @Post('rutas')
+  @ApiOperation({ summary: 'Crear ruta' })
+  crearRuta(@CurrentUser() admin: AuthUser, @Body() dto: RutaDto) {
+    return this.adminService.crearRuta(admin, dto);
+  }
+
+  @Patch('rutas/:id')
+  @ApiOperation({ summary: 'Modificar ruta (asignar recolector, estado)' })
+  actualizarRuta(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: RutaDto,
+  ) {
+    return this.adminService.actualizarRuta(admin, id, dto);
+  }
+
+  @Post('puntos-encuentro')
+  @ApiOperation({ summary: 'Crear punto de EcoReciclaje' })
+  crearPunto(@CurrentUser() admin: AuthUser, @Body() dto: CreatePuntoDto) {
+    return this.adminService.crearPunto(admin, dto);
+  }
+
+  @Patch('puntos-encuentro/:id')
+  @ApiOperation({ summary: 'Modificar punto (activar/desactivar)' })
+  actualizarPunto(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CreatePuntoDto,
+  ) {
+    return this.adminService.actualizarPunto(admin, id, dto);
+  }
+
+  @Get('vehiculos')
+  @ApiOperation({ summary: 'Listar vehículos con recolector asignado' })
+  listarVehiculos() {
+    return this.adminService.listarVehiculos();
+  }
+
+  @Post('vehiculos')
+  @ApiOperation({ summary: 'Crear vehículo' })
+  crearVehiculo(@CurrentUser() admin: AuthUser, @Body() dto: VehiculoDto) {
+    return this.adminService.crearVehiculo(admin, dto);
+  }
+
+  @Patch('vehiculos/:id')
+  @ApiOperation({ summary: 'Modificar vehículo' })
+  actualizarVehiculo(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: VehiculoDto,
+  ) {
+    return this.adminService.actualizarVehiculo(admin, id, dto);
+  }
+
+  @Get('recolectores')
+  @ApiOperation({
+    summary: 'Personal: recolectores con total y última entrega',
+  })
+  listarRecolectores() {
+    return this.adminService.listarRecolectores();
+  }
+
+  @Get('incidencias')
+  @ApiOperation({ summary: 'Listar incidencias reportadas (paginado)' })
+  listarIncidencias(@Query() q: PaginacionDto) {
+    return this.adminService.listarIncidencias(q);
+  }
+
+  @Patch('incidencias/:id/estado')
+  @ApiOperation({ summary: 'Cambiar estado de una incidencia' })
+  cambiarEstadoIncidencia(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: EstadoIncidenciaDto,
+  ) {
+    return this.adminService.cambiarEstadoIncidencia(admin, id, dto.estado);
+  }
+
+  @Get('cooperativas')
+  @ApiOperation({ summary: 'Listar cooperativas (Copaff)' })
+  listarCooperativas() {
+    return this.adminService.listarCooperativas();
+  }
+
+  @Post('cooperativas')
+  @ApiOperation({ summary: 'Crear cooperativa' })
+  crearCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Body() dto: CooperativaDto,
+  ) {
+    return this.adminService.crearCooperativa(admin, dto);
+  }
+
+  @Patch('cooperativas/:id')
+  @ApiOperation({ summary: 'Modificar cooperativa' })
+  actualizarCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CooperativaDto,
+  ) {
+    return this.adminService.actualizarCooperativa(admin, id, dto);
+  }
+
+  @Get('reportes/exportar')
+  @ApiOperation({ summary: 'Exportar reporte de recolecciones (csv|xlsx)' })
+  async exportarReporte(
+    @Query('formato') formato: 'csv' | 'xlsx' = 'csv',
+    @Res() res: Response,
+  ) {
+    const { contentType, filename, body } =
+      await this.adminService.exportarReporte(
+        formato === 'xlsx' ? 'xlsx' : 'csv',
+      );
+    res
+      .status(200)
+      .setHeader('Content-Type', contentType)
+      .setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+      .send(body);
+  }
+
+  @Get('buscar')
+  @ApiOperation({
+    summary: 'Búsqueda global (usuarios, entregas, vouchers, puntos)',
+  })
+  buscar(@Query('q') q: string) {
+    return this.adminService.buscar(q ?? '');
+  }
+
+  @Get('cooperativas/:id/miembros')
+  @ApiOperation({ summary: 'Miembros (recolectores) de una cooperativa' })
+  miembrosCooperativa(@Param('id') id: string) {
+    return this.adminService.miembrosCooperativa(id);
+  }
+
+  @Patch('recolectores/:id/cooperativa')
+  @ApiOperation({
+    summary: 'Asignar (o quitar) un recolector a su cooperativa',
+  })
+  asignarCooperativa(
+    @CurrentUser() admin: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: AsignarCooperativaDto,
+  ) {
+    return this.adminService.asignarCooperativa(
+      admin,
+      id,
+      dto.cooperativaId ?? null,
+    );
   }
 
   @Get('dashboard/clientes')

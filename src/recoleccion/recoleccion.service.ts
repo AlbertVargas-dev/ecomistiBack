@@ -34,17 +34,56 @@ export class RecoleccionService {
   async identificarQr(dto: IdentificarQrDto) {
     const user = await this.prisma.user.findUnique({
       where: { qrCode: dto.qrCode },
-      select: { nombres: true, apellidos: true, rol: true },
+      select: { nombres: true, apellidos: true, rol: true, qrCode: true },
     });
     if (!user) {
       throw new NotFoundException('QR no encontrado');
     }
+    return this.resumenIdentificado(user);
+  }
+
+  /**
+   * Identificar por DNI (alternativa al escaneo): el DNI es único,
+   * por lo que identifica a la misma cuenta que el QR.
+   */
+  async identificarDni(dni: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { dni },
+      select: { nombres: true, apellidos: true, rol: true, qrCode: true },
+    });
+    if (!user) {
+      throw new NotFoundException('DNI no encontrado');
+    }
+    return this.resumenIdentificado(user);
+  }
+
+  private resumenIdentificado(user: {
+    nombres: string;
+    apellidos: string;
+    rol: string;
+    qrCode: string;
+  }) {
     const primerNombre = user.nombres.split(' ')[0] ?? user.nombres;
     const inicialApellido = user.apellidos.charAt(0);
     return {
       nombreParcial: `${primerNombre} ${inicialApellido}.`,
       tipoCuenta: user.rol,
+      // El recolector necesita el qrCode para sincronizar la entrega.
+      qrCode: user.qrCode,
     };
+  }
+
+  /** Entregas registradas por este recolector (panel/home del recolector). */
+  async misEntregas(recolectorId: string) {
+    return this.prisma.entrega.findMany({
+      where: { recolectorId },
+      include: {
+        usuario: { select: { nombres: true, apellidos: true } },
+        detalles: true,
+      },
+      orderBy: { fechaCaptura: 'desc' },
+      take: 50,
+    });
   }
 
   /**
@@ -210,6 +249,9 @@ export class RecoleccionService {
             qrCode: item.qrCode,
             fechaCaptura,
             puntosTotales,
+            // Volumen: del móvil si viene; si no, estimado (2.5 L/kg ≈ 0.0025 m³/kg).
+            volumenM3:
+              item.volumenM3 ?? Math.round(pesoTotal * 0.0025 * 100) / 100,
             detalles: { create: lineas },
           },
         });
@@ -241,6 +283,31 @@ export class RecoleccionService {
             creadoPor: recolector.id,
           },
         });
+
+        // Hito de recompensa: notificar las ofertas que el usuario
+        // puede pagar AHORA y antes no (saldo cruza el costo).
+        const saldoPrevio = balance?.puntosActuales ?? 0;
+        const ofertas = await tx.ofertaRecompensa.findMany({
+          where: {
+            activo: true,
+            dirigidoA: usuario.rol,
+            costoPuntos: { lte: saldoPosterior, gt: saldoPrevio },
+          },
+        });
+        for (const oferta of ofertas) {
+          await tx.notificacion.createMany({
+            data: [
+              {
+                usuarioId: usuario.id,
+                tipo: 'HITO_RECOMPENSA',
+                titulo: '¡Llegaste al hito de una recompensa!',
+                mensaje: `Ya podés canjear "${oferta.titulo}" por ${oferta.costoPuntos} puntos.`,
+                ofertaId: oferta.id,
+              },
+            ],
+            skipDuplicates: true,
+          });
+        }
 
         return creada;
       });
