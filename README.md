@@ -21,7 +21,6 @@ Backend de la plataforma social universitaria **EcoMisti** (gestión de reciclaj
 - Recolección offline: sincronización idempotente por ítem (ACEPTADA/DUPLICADA/RECHAZADA), factores versionados por fecha de captura, ledger inmutable de puntos.
 - Canjes y vouchers: transacción atómica con descuento condicional, ciclo EMITIDO→APLICADO/VENCIDO/CANCELADO, Rentas, notificaciones de hito.
 - Administración: dashboard con comparativas, tendencia, mapa de calor, CRUD de ofertas/rutas/puntos/vehículos/cooperativas/factores, anulación de entregas, reportes y exportar CSV/XLSX, auditoría.
-- Documentación de negocio: `docs/02_Reglas_de_Negocio_y_Seguridad.md` (spec MVP/Fase 2).
 
 ## Instalación y ejecución
 
