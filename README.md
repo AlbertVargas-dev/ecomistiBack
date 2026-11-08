@@ -9,7 +9,7 @@ Backend de la plataforma social universitaria **EcoMisti** (gestión de reciclaj
 | Framework | NestJS 12 (módulos / controladores / servicios) |
 | Lenguaje | TypeScript 6 (ESM, `nodenext`) |
 | Base de datos | PostgreSQL 16 (Docker) vía Prisma ORM |
-| Auth | JWT + Passport, bcrypt, roles (`ADMIN, RECOLECTOR, CIUDADANO, URBANIZACION, RENTAS`) |
+| Auth | JWT + Passport, bcrypt, roles (`ADMIN, RECOLECTOR, CIUDADANO, URBANIZACION`) |
 | Validación | class-validator (DTOs) + `ValidationPipe` global estricto |
 | Docs | Swagger/OpenAPI en `/api/docs` |
 | Tests | Vitest (unitarios + e2e) |
@@ -38,5 +38,5 @@ Swagger: `http://localhost:3000/api/docs` · Tests: `pnpm run test` / `test:e2e`
 
 ## Seguridad
 
-- Contraseñas y PIN con **bcrypt** (costo 10); respuestas sin hashes.
-- Prisma parametrizado (sin SQL crudo) → **sin SQL injection**; React escapa por defecto → **sin XSS**; guards JWT + roles en todas las rutas.
+- Contraseñas y PIN con **bcrypt**; respuestas sin hashes.
+- Prisma parametrizado → **sin SQL injection**; React escapa por defecto → **sin XSS**; guards JWT + roles en todas las rutas.
