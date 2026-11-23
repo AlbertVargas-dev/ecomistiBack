@@ -1,0 +1,38 @@
+# Dependencias y build local
+node_modules
+.pnpm-store
+dist
+*.tsbuildinfo
+coverage
+
+# Entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Control de versiones y CI
+.git
+.gitignore
+.gitattributes
+.github
+
+# Documentación y archivos locales
+docs
+AGENTS.md
+GUIA_DESARROLLO.md
+guia_desarrollo.md
+README.md
+
+# Tests y config de desarrollo
+test
+vitest.config.ts
+vitest.config.e2e.ts
+.oxlintrc.json
+.prettierrc
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Logs y SO
+*.log
+.DS_Store
