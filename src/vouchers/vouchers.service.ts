@@ -1,11 +1,22 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AuthUser } from '../common/decorators/current-user.decorator.js';
+
+const USUARIO_PUBLIC_SELECT = {
+  id: true,
+  nombres: true,
+  apellidos: true,
+  dni: true,
+  email: true,
+  rol: true,
+  activo: true,
+} as const;
 
 @Injectable()
 export class VouchersService {
@@ -20,18 +31,43 @@ export class VouchersService {
     });
   }
 
+  /**
+   * Detalle de un voucher por ID verificando propiedad del recurso (anti-IDOR, OWASP A01:2025).
+   */
+  async obtenerMiVoucherPorId(user: AuthUser, id: string) {
+    const voucher = await this.prisma.voucherCanje.findUnique({
+      where: { id },
+      include: { oferta: true },
+    });
+    if (!voucher) {
+      throw new NotFoundException('Voucher no encontrado');
+    }
+    if (voucher.usuarioId !== user.id && user.rol !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a este recurso',
+      );
+    }
+    return voucher;
+  }
+
   /** Consulta por código (RENTAS/ADMIN). Vencimiento perezoso: EMITIDO vencido → VENCIDO. */
   async consultarPorCodigo(user: AuthUser, codigo: string) {
     const voucher = await this.prisma.voucherCanje.findUnique({
       where: { codigoVoucher: codigo },
-      include: { oferta: true, usuario: true },
+      include: {
+        oferta: true,
+        usuario: { select: USUARIO_PUBLIC_SELECT },
+      },
     });
     if (!voucher) throw new NotFoundException('Voucher no encontrado');
     this.assertRentasPuedeVer(user, voucher.usuario.rol);
     await this.vencerVencidos(voucher.usuarioId);
     return this.prisma.voucherCanje.findUnique({
       where: { codigoVoucher: codigo },
-      include: { oferta: true, usuario: true },
+      include: {
+        oferta: true,
+        usuario: { select: USUARIO_PUBLIC_SELECT },
+      },
     });
   }
 
@@ -39,7 +75,9 @@ export class VouchersService {
   async aplicar(user: AuthUser, codigo: string) {
     const voucher = await this.prisma.voucherCanje.findUnique({
       where: { codigoVoucher: codigo },
-      include: { usuario: true },
+      include: {
+        usuario: { select: USUARIO_PUBLIC_SELECT },
+      },
     });
     if (!voucher) throw new NotFoundException('Voucher no encontrado');
     this.assertRentasPuedeVer(user, voucher.usuario.rol);

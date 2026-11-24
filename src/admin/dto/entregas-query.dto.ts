@@ -1,4 +1,10 @@
-import { IsDateString, IsEnum, IsOptional, IsString } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { EstadoEntrega, TipoResiduo } from '@prisma/client';
 import { PaginacionDto } from '../../common/dto/paginacion.dto.js';
@@ -32,5 +38,6 @@ export class EntregasQueryDto extends PaginacionDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'La búsqueda no puede exceder 100 caracteres' })
   search?: string;
 }

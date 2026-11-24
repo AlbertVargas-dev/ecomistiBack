@@ -1,4 +1,4 @@
-import { IsOptional, IsString, Matches } from 'class-validator';
+import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -18,11 +18,17 @@ export class LoginDto {
   )
   @IsOptional()
   @IsString()
+  @MaxLength(254, {
+    message: 'El correo electrónico no puede exceder 254 caracteres',
+  })
   email?: string;
 
   @ApiPropertyOptional({ example: 'Secreto123', description: 'Contraseña' })
   @IsOptional()
   @IsString()
+  @MaxLength(72, {
+    message: 'La contraseña no puede exceder 72 caracteres',
+  })
   password?: string;
 
   @ApiPropertyOptional({

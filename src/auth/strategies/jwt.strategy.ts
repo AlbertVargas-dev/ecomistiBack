@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Role } from '@prisma/client';
+import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
 export interface JwtPayload {
@@ -10,6 +11,35 @@ export interface JwtPayload {
   email: string;
   rol: Role;
   type?: string;
+}
+
+/**
+ * Extrae una cookie por nombre desde la cabecera Cookie sin dependencias adicionales.
+ */
+export function extractCookie(
+  cookieHeader: string | undefined,
+  name: string,
+): string | null {
+  if (!cookieHeader) return null;
+  const parts = cookieHeader.split(';');
+  for (const part of parts) {
+    const eqIdx = part.indexOf('=');
+    if (eqIdx === -1) continue;
+    const key = part.slice(0, eqIdx).trim();
+    if (key === name) {
+      const val = part.slice(eqIdx + 1).trim();
+      try {
+        return decodeURIComponent(val);
+      } catch {
+        return val;
+      }
+    }
+  }
+  return null;
+}
+
+export function extractJwtFromCookie(req: Request): string | null {
+  return extractCookie(req?.headers?.cookie, 'access_token');
 }
 
 @Injectable()
@@ -24,7 +54,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new Error('JWT_SECRET no está definido en el entorno');
     }
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+        extractJwtFromCookie,
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
     });

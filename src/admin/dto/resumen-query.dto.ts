@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -22,5 +22,6 @@ export class ResumenQueryDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'El distrito no puede exceder 100 caracteres' })
   distrito?: string;
 }

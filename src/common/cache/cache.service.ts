@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 
 type Entrada<T> = { valor: T; expira: number };
 
+const MAX_CACHE_ENTRIES = 200;
+
 /**
- * Caché en memoria con TTL (suficiente para el MVP: una sola instancia).
- * Evita recomputar agregados del dashboard en cada visita al panel.
+ * Caché en memoria acotada con TTL (segura para contenedores con poca RAM como Railway free tier).
+ * Evita crecimiento ilimitado en RAM limpiando entradas expiradas y manteniendo un tope máximo.
  */
 @Injectable()
 export class CacheService {
@@ -21,7 +23,20 @@ export class CacheService {
   }
 
   set<T>(clave: string, valor: T, ttlMs = 30_000): T {
-    this.store.set(clave, { valor, expira: Date.now() + ttlMs });
+    const ahora = Date.now();
+    if (this.store.size >= MAX_CACHE_ENTRIES) {
+      for (const [k, v] of this.store.entries()) {
+        if (ahora > v.expira) {
+          this.store.delete(k);
+        }
+      }
+      while (this.store.size >= MAX_CACHE_ENTRIES) {
+        const oldestKey = this.store.keys().next().value;
+        if (oldestKey === undefined) break;
+        this.store.delete(oldestKey);
+      }
+    }
+    this.store.set(clave, { valor, expira: ahora + ttlMs });
     return valor;
   }
 }

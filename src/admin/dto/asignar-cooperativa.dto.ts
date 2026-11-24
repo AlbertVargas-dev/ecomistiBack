@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AsignarCooperativaDto {
@@ -8,5 +8,8 @@ export class AsignarCooperativaDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(64, {
+    message: 'El ID de cooperativa no puede exceder 64 caracteres',
+  })
   cooperativaId?: string | null;
 }

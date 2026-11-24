@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import {
   ACCESS_TOKEN_TTL,
   BLOQUEO_MINUTOS,
+  DUMMY_BCRYPT_HASH,
   MAX_INTENTOS_FALLIDOS,
   REFRESH_TOKEN_TTL,
   SALT_ROUNDS,
@@ -134,6 +135,7 @@ export class AuthService {
     });
 
     if (!user) {
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
       throw new UnauthorizedException('Credenciales inválidas');
     }
     this.assertCanLogin(user);
@@ -163,6 +165,7 @@ export class AuthService {
     });
 
     if (!perfil) {
+      await bcrypt.compare(dto.pin, DUMMY_BCRYPT_HASH);
       throw new UnauthorizedException('Credenciales inválidas');
     }
     const user = perfil.usuario;
@@ -183,6 +186,9 @@ export class AuthService {
   // --- Refresh (spec §4): access 15 min + refresh 7 dias, revocable por desactivacion.
 
   async refresh(dto: RefreshDto) {
+    if (!dto.refreshToken) {
+      throw new UnauthorizedException('Refresh token inválido o expirado');
+    }
     let payload: { sub: string; type?: string };
     try {
       payload = await this.jwtService.verifyAsync(dto.refreshToken);

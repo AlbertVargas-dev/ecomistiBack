@@ -13,7 +13,12 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
+import {
+  THROTTLE_AUTH_LIMIT,
+  THROTTLE_AUTH_TTL_MS,
+} from '../config/security.config.js';
 import { UsuariosService } from './usuarios.service.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -72,6 +77,9 @@ export class UsuariosController {
   }
 
   @Patch('me/cambiar-password')
+  @Throttle({
+    short: { limit: THROTTLE_AUTH_LIMIT, ttl: THROTTLE_AUTH_TTL_MS },
+  })
   @Roles(
     Role.ADMIN,
     Role.RECOLECTOR,
@@ -112,5 +120,39 @@ export class UsuariosController {
   @ApiOperation({ summary: 'Entregas propias con sus detalles' })
   getEntregas(@CurrentUser() user: AuthUser, @Query() q: PaginacionDto) {
     return this.usuariosService.getEntregas(user, q);
+  }
+
+  @Get('me/entregas/:id')
+  @ApiOperation({
+    summary: 'Detalle de una entrega propia por ID (protegido contra IDOR)',
+  })
+  @ApiResponse({ status: 200, description: 'Detalle de la entrega.' })
+  @ApiResponse({
+    status: 403,
+    description: 'La entrega pertenece a otro usuario (IDOR bloqueado).',
+  })
+  @ApiResponse({ status: 404, description: 'Entrega no encontrada.' })
+  getEntregaPorId(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.usuariosService.getEntregaPorId(user, id);
+  }
+
+  @Get(':id')
+  @Roles(
+    Role.ADMIN,
+    Role.RECOLECTOR,
+    Role.CIUDADANO,
+    Role.URBANIZACION,
+    Role.RENTAS,
+  )
+  @ApiOperation({
+    summary: 'Obtener perfil por ID (solo el propio usuario o ADMIN)',
+  })
+  @ApiResponse({ status: 200, description: 'Perfil del usuario.' })
+  @ApiResponse({
+    status: 403,
+    description: 'Intento de acceder al perfil de otro usuario (IDOR).',
+  })
+  getUsuarioPorId(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.usuariosService.getUsuarioPorId(user, id);
   }
 }
