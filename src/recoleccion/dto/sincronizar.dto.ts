@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -60,11 +61,15 @@ export class SincronizarDto {
   @ApiPropertyOptional({ example: 'device-001' })
   @IsOptional()
   @IsString()
+  @MaxLength(100, { message: 'El deviceId no puede exceder 100 caracteres' })
   deviceId?: string;
 
   @ApiProperty({ type: [EntregaSyncDto] })
   @ValidateNested({ each: true })
   @Type(() => EntregaSyncDto)
   @ArrayMinSize(1, { message: 'El lote debe tener al menos 1 entrega' })
+  @ArrayMaxSize(100, {
+    message: 'El lote no puede exceder 100 entregas por petición',
+  })
   entregas: EntregaSyncDto[];
 }

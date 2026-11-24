@@ -6,6 +6,8 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -15,16 +17,21 @@ export class CreateOfertaDto {
   @ApiProperty({ example: 'Vale de mercado' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(150, { message: 'El título no puede exceder 150 caracteres' })
   titulo: string;
 
   @ApiProperty({ example: 'Vale canjeable en mercados afiliados' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(1000, {
+    message: 'La descripción no puede exceder 1000 caracteres',
+  })
   descripcion: string;
 
   @ApiProperty({ example: 100 })
   @IsInt()
   @Min(1)
+  @Max(1_000_000)
   costoPuntos: number;
 
   @ApiProperty({ enum: [Role.CIUDADANO, Role.URBANIZACION] })
@@ -35,6 +42,7 @@ export class CreateOfertaDto {
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Max(1_000_000)
   stockDisponible?: number | null;
 
   @ApiPropertyOptional()
@@ -51,12 +59,14 @@ export class CreateOfertaDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(100_000)
   limitePorUsuario?: number | null;
 
   @ApiPropertyOptional({ example: 90 })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(365)
   diasVigenciaVoucher?: number;
 
   @ApiPropertyOptional({ example: true })
