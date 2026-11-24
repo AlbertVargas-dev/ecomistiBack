@@ -51,7 +51,7 @@ import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.
       {
         name: 'short',
         ttl: 60_000,
-        limit: Number(process.env.THROTTLE_LOGIN_LIMIT ?? 10),
+        limit: Number(process.env.THROTTLE_LOGIN_LIMIT ?? 5),
       },
     ]),
   ],

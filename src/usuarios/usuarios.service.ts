@@ -1,4 +1,5 @@
 import {
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -34,6 +35,25 @@ export class UsuariosService {
   }
 
   /**
+   * Consulta perfil por ID validando que sea el propio usuario o ADMIN (anti-IDOR, OWASP A01:2025).
+   */
+  async getUsuarioPorId(user: AuthUser, id: string) {
+    this.assertNoDesactivado(user);
+    if (user.id !== id && user.rol !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a este recurso',
+      );
+    }
+    const target = await this.prisma.user.findUnique({
+      where: { id },
+      include: { puntosBalance: true },
+    });
+    if (!target) throw new NotFoundException('Usuario no encontrado');
+    const { passwordHash: _passwordHash, ...sanitized } = target;
+    return sanitized;
+  }
+
+  /**
    * Regenera el QR (spec §4): el anterior queda inválido al instante porque
    * la sincronización busca por qrCode. Solo CIUDADANO/URBANIZACION (el rol
    * lo valida el guard con @Roles en el controller).
@@ -65,6 +85,26 @@ export class UsuariosService {
       orderBy: { fechaCaptura: 'desc' },
       ...paginacion(q),
     });
+  }
+
+  /**
+   * Detalle de una entrega propia verificando titularidad (anti-IDOR, OWASP A01:2025).
+   */
+  async getEntregaPorId(user: AuthUser, id: string) {
+    this.assertActive(user);
+    const entrega = await this.prisma.entrega.findUnique({
+      where: { id },
+      include: { detalles: true },
+    });
+    if (!entrega) {
+      throw new NotFoundException('Entrega no encontrada');
+    }
+    if (entrega.usuarioId !== user.id && user.rol !== Role.ADMIN) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a este recurso',
+      );
+    }
+    return entrega;
   }
 
   /**
@@ -157,8 +197,13 @@ export class UsuariosService {
     const notificacion = await this.prisma.notificacion.findUnique({
       where: { id },
     });
-    if (!notificacion || notificacion.usuarioId !== user.id) {
+    if (!notificacion) {
       throw new NotFoundException('Notificación no encontrada');
+    }
+    if (notificacion.usuarioId !== user.id) {
+      throw new ForbiddenException(
+        'No tienes permisos para acceder a este recurso',
+      );
     }
     return this.prisma.notificacion.update({
       where: { id },

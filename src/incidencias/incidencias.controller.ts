@@ -1,5 +1,18 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+} from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { IncidenciasService } from './incidencias.service.js';
 import { CreateIncidenciaDto } from './dto/create-incidencia.dto.js';
@@ -25,5 +38,49 @@ export class IncidenciasController {
   @ApiOperation({ summary: 'Mis incidencias reportadas' })
   misIncidencias(@CurrentUser() user: AuthUser) {
     return this.incidenciasService.misIncidencias(user);
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'Obtener detalle de una incidencia propia (protegido contra IDOR)',
+  })
+  @ApiResponse({ status: 200, description: 'Detalle de la incidencia.' })
+  @ApiResponse({
+    status: 403,
+    description: 'La incidencia pertenece a otro usuario (IDOR bloqueado).',
+  })
+  @ApiResponse({ status: 404, description: 'Incidencia no encontrada.' })
+  obtenerPorId(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.incidenciasService.obtenerPorId(user, id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({
+    summary: 'Actualizar una incidencia propia ABIERTA (protegido contra IDOR)',
+  })
+  @ApiResponse({ status: 200, description: 'Incidencia actualizada.' })
+  @ApiResponse({
+    status: 403,
+    description: 'La incidencia pertenece a otro usuario (IDOR bloqueado).',
+  })
+  actualizar(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: CreateIncidenciaDto,
+  ) {
+    return this.incidenciasService.actualizarPropia(user, id, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Eliminar una incidencia propia ABIERTA (protegido contra IDOR)',
+  })
+  @ApiResponse({ status: 200, description: 'Incidencia eliminada.' })
+  @ApiResponse({
+    status: 403,
+    description: 'La incidencia pertenece a otro usuario (IDOR bloqueado).',
+  })
+  eliminar(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.incidenciasService.eliminarPropia(user, id);
   }
 }

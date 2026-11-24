@@ -78,8 +78,15 @@ export class AdminService {
       dni: dto.dni,
     });
 
-    const { passwordHash: _ph, ...sanitized } = user;
-    return { ...sanitized, pinInicial: pin };
+    const { passwordHash: _ph, perfilRecolector, ...sanitized } = user;
+    const sanitizedPerfil = perfilRecolector
+      ? (({ pinHash: _pinHash, ...restPerfil }) => restPerfil)(perfilRecolector)
+      : null;
+    return {
+      ...sanitized,
+      perfilRecolector: sanitizedPerfil,
+      pinInicial: pin,
+    };
   }
 
   /** Activar/desactivar recolector (spec §4/§7): setea desactivadoAt al revocar. */
@@ -931,9 +938,15 @@ export class AdminService {
           orderBy: { fechaCaptura: 'desc' },
           select: { fechaCaptura: true },
         });
-        const { passwordHash: _ph, ...rest } = r;
+        const { passwordHash: _ph, perfilRecolector, ...rest } = r;
+        const sanitizedPerfil = perfilRecolector
+          ? (({ pinHash: _pinHash, ...restPerfil }) => restPerfil)(
+              perfilRecolector,
+            )
+          : null;
         return {
           ...rest,
+          perfilRecolector: sanitizedPerfil,
           zonaCamion: r.perfilRecolector?.zonaCamion ?? null,
           totalEntregas: r._count.entregasRegistradas,
           ultimaEntrega: ultima?.fechaCaptura ?? null,
@@ -1106,14 +1119,15 @@ export class AdminService {
 
     if (formato === 'csv') {
       const headers = Object.keys(filas[0] ?? { id: '' });
+      const sanitizeCsvCell = (raw: string): string => {
+        const prefix = /^[=+\-@\t\r]/.test(raw) ? "'" : '';
+        return `"${prefix}${raw.replaceAll('"', '""')}"`;
+      };
       const csv = [
         headers.join(','),
         ...filas.map((f) =>
           headers
-            .map(
-              (h) =>
-                `"${String(f[h as keyof typeof f]).replaceAll('"', '""')}"`,
-            )
+            .map((h) => sanitizeCsvCell(String(f[h as keyof typeof f])))
             .join(','),
         ),
       ].join('\n');
@@ -1153,7 +1167,7 @@ export class AdminService {
   // --- Busqueda global (header del diseno)
 
   async buscar(q: string) {
-    const term = q.trim();
+    const term = q.replaceAll('\0', '').trim().slice(0, 100);
     if (!term) return { usuarios: [], entregas: [], vouchers: [], puntos: [] };
     const [usuarios, entregas, vouchers, puntos] = await Promise.all([
       this.prisma.user.findMany({
